@@ -4,11 +4,14 @@
 # midi is kinda weird, a track contains events, events are either note on or note off, with a note number,
 # a channel, a velocity (how hard the key was pressed) and a time since  the last note
 
+# this is a stochastic version - if there's any ambiguity, choose randomly. If it fails, then, repeat. Not guaranteed to finish, but probably fine.
+
 import mido
 import sys
 import copy
 import os
 import pickle
+import random
 
 
 
@@ -54,6 +57,7 @@ def parse_midi(filepath, num_voices, debug=False):
                         del(worklist[i])
                         newNote.start_time = time
                         newNote.stop_time = -1
+                        newNote.voice = -1
                         tempworklist += [newNote]
                     else: i+=1
 
@@ -102,15 +106,16 @@ def assign_voices(piece, debug=False):
             for j in range(len(piece)-1):
                 last_note = None
                 for k in range(len(piece[j])):
-                    if piece[j][k].stop_time < piece[-1][i].start_time: last_note = piece[j][k]
+                    if piece[j][k].stop_time < piece[-1][i].start_time: last_note = piece[j][k] # sorry for the magic number, sets a threshold so it doesn't pick up on super far back notes
                     else: break
                 if last_note is None: continue
-                elif last_note.num < piece[-1][i].num:
-                    if debug: print(piece[-1][i], "lower bound set to ",  max(piece[-1][i].lower_bound, j), "because of overlap with ", piece[j][k])
-                    piece[-1][i].lower_bound = max(piece[-1][i].lower_bound, j)
-                elif last_note.num > piece[-1][i].num:
-                    if debug: print(piece[-1][i], "upper bound set to ", min(piece[-1][i].upper_bound, j), "because of overlap with ", piece[j][k])
-                    piece[-1][i].upper_bound = min(piece[-1][i].upper_bound, j)
+                else:
+                    if last_note.num < piece[-1][i].num:
+                        if debug: print(piece[-1][i], "lower bound set to ",  max(piece[-1][i].lower_bound, j), "because of overlap with ", last_note)
+                        piece[-1][i].lower_bound = max(piece[-1][i].lower_bound, j)
+                    if last_note.num > piece[-1][i].num:
+                        if debug: print(piece[-1][i], "upper bound set to ", min(piece[-1][i].upper_bound, j), "because of overlap with ", last_note)
+                        piece[-1][i].upper_bound = min(piece[-1][i].upper_bound, j)
             # try to assign a voice
             if piece[-1][i].lower_bound == piece[-1][i].upper_bound:
                 v = piece[-1][i].lower_bound
@@ -124,7 +129,7 @@ def assign_voices(piece, debug=False):
                 print("Unable to label ", piece[-1][i], "lower bound: ", piece[-1][i].lower_bound, " upper bound: ", piece[-1][i].upper_bound)
                 return piece
             else:
-                closest = None
+                """closest = None
                 for j in range(piece[-1][i].lower_bound, piece[-1][i].upper_bound+1):
                     last_note = None
                     for k in range(len(piece[j])):
@@ -154,7 +159,9 @@ def assign_voices(piece, debug=False):
                         continue
                     else: 
                         v = closest.voice
-                        if debug: print(piece[-1][i], "couldn't be pinned down, assigned to closest later note voice", v)
+                        if debug: print(piece[-1][i], "couldn't be pinned down, assigned to closest later note voice", v)"""
+                v = random.randint(piece[-1][i].lower_bound, piece[-1][i].upper_bound)
+                if debug: print(piece[-1][i], "couldn't be pinned down, assigning to voice", v," at random")
 
                 
                 piece[-1][i].voice = v
@@ -173,20 +180,35 @@ def print_piece(piece):
 
 
 def parse_dataset(directory, num_voices):
-    files = [os.path.join(directory,f) for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+    files = [os.path.join(directory,f) for f in sorted(os.listdir(directory)) if os.path.isfile(os.path.join(directory, f))]
     pieces = []
     for f in files:
-        print("Parsing", f)
-        pieces += [assign_voices(parse_midi(f, num_voices))]
+        piece = parse_midi(f, num_voices)
+        piece_assigned = copy.deepcopy(piece)
+        while len(piece_assigned[-1]) > 0:
+            try:
+                print("Parsing", f)
+                piece_assigned = copy.deepcopy(piece)
+                piece_assigned = assign_voices(piece_assigned)
+            except KeyboardInterrupt:
+                break
+        pieces += piece_assigned
     return pieces
 
+def debug_piece(f):
+    num_voices = 4
+    piece = parse_midi(f, num_voices, debug=True)
+    piece_assigned = copy.deepcopy(piece)
+    while len(piece_assigned[-1]) > 0:
+        print("Parsing", f)
+        piece_assigned = copy.deepcopy(piece)
+        piece_assigned = assign_voices(piece_assigned, debug=True)
 
 if __name__ == '__main__':
-    piece = parse_midi('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/164.mid', 4, debug=True)
-    piece = assign_voices(piece, debug=True)
-    #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/', 4), 'Data/train.p')
-    #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/validate/', 4), 'Data/validate.p')
-    #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/test/', 4), 'Data/test.p')
+    #debug_piece('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/322.mid') 381
+    pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/', 4), open('Data/train.p', 'wb'))
+    pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/valid/', 4), open('Data/validate.p', 'wb'))
+    pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/test/', 4), open('Data/test.p', 'wb'))
     
 
 
