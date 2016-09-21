@@ -7,20 +7,11 @@
 import mido
 import sys
 import copy
+import os
+import pickle
 
 
-
-
-class TempNote:
-    def __init__(this,number,start_time, stop_time = -1, num_voices = 4):
-        this.num = number
-        this.start_time = start_time
-        this.voice = -1 # voices are numbered from bottom up
-        this.upper_bound = num_voices-1
-        this.lower_bound = 0
-        this.stop_time = stop_time
-    def __str__(self):
-        return str((self.num, self.start_time, self.stop_time, self.voice))
+from Utilities.note import *
 
 
 # parse a midi file and return the piece as a list of num_voices lists of notes, some notes may not be assigned to voices, they will be in piece[num_voices]
@@ -55,7 +46,7 @@ def parse_midi(filepath, num_voices, debug=False):
                         tempworklist += [newNote]
                     else: i+=1
 
-                worklist += [TempNote(message.note, time, num_voices=num_voices)]
+                worklist += [Note(message.note, time, num_voices=num_voices)]
                 worklist += tempworklist
             # remove notes from the worklist when they finish
             elif message.type == 'note_off':
@@ -91,6 +82,7 @@ def assign_voices(piece, debug=False):
                 piece[-1][i].voice = v
                 piece[v] += [piece[-1][i]]
                 piece[-1].remove(piece[-1][i])
+                piece[v] = sorted(piece[v], key=(lambda n: n.start_time))
                 continue
             elif piece[-1][i].lower_bound > piece[-1][i].upper_bound:
                 print("Unable to label ", piece[-1][i], "lower bound: ", piece[-1][i].lower_bound, " upper bound: ", piece[-1][i].upper_bound)
@@ -101,7 +93,8 @@ def assign_voices(piece, debug=False):
                 for k in range(len(piece[j])):
                     if piece[j][k].stop_time < piece[-1][i].start_time: last_note = piece[j][k]
                     else: break
-                if last_note.num < piece[-1][i].num:
+                if last_note is None: continue
+                elif last_note.num < piece[-1][i].num:
                     if debug: print(piece[-1][i], "lower bound set to ",  max(piece[-1][i].lower_bound, j), "because of overlap with ", piece[j][k])
                     piece[-1][i].lower_bound = max(piece[-1][i].lower_bound, j)
                 elif last_note.num > piece[-1][i].num:
@@ -114,16 +107,49 @@ def assign_voices(piece, debug=False):
                 piece[-1][i].voice = v
                 piece[v] += [piece[-1][i]]
                 piece[-1].remove(piece[-1][i])
+                piece[v] = sorted(piece[v], key=(lambda n: n.start_time))
                 continue
             elif piece[-1][i].lower_bound > piece[-1][i].upper_bound:
                 print("Unable to label ", piece[-1][i], "lower bound: ", piece[-1][i].lower_bound, " upper bound: ", piece[-1][i].upper_bound)
                 return piece
             else:
-                v = piece[-1][i].lower_bound
-                if debug: print(piece[-1][i], "couldn't be pinned down, assigned to lower bound ", v)
+                closest = None
+                for j in range(piece[-1][i].lower_bound, piece[-1][i].upper_bound+1):
+                    last_note = None
+                    for k in range(len(piece[j])):
+                        if piece[j][k].stop_time < piece[-1][i].start_time: last_note = piece[j][k]
+                        else: break
+                    if last_note is None: continue
+                    if closest is None and last_note is not None: closest = last_note
+                    elif abs(last_note.num - piece[-1][i].num) < abs(closest.num - piece[-1][i].num):
+                        closest = last_note
+                if closest is not None:
+                    v = closest.voice
+                    if debug: print(piece[-1][i], "couldn't be pinned down, assigned to closest earlier note voice", v)
+                else:
+                    # this is an annoying case - unlabelable thing at the start of the piece
+                    for j in range(piece[-1][i].lower_bound, piece[-1][i].upper_bound+1):
+                        next_note = None
+                        for k in range(len(piece[j])):
+                            if piece[j][k].stop_time < piece[-1][i].start_time: last_note = piece[j][k]
+                            else: 
+                                next_note = piece[j][k]
+                                break
+                        if next_note is None: continue
+                        if closest is None and next_note is not None: closest = next_note
+                        elif abs(next_note.num - piece[-1][i].num) < abs(closest.num - piece[-1][i].num):
+                            closest = next_note
+                    if closest is None:
+                        continue
+                    else: 
+                        v = closest.voice
+                        if debug: print(piece[-1][i], "couldn't be pinned down, assigned to closest later note voice", v)
+
+                
                 piece[-1][i].voice = v
                 piece[v] += [piece[-1][i]]
                 piece[-1].remove(piece[-1][i])
+                piece[v] = sorted(piece[v], key=(lambda n: n.start_time))
                 continue
             i+=1
     return piece
@@ -135,9 +161,22 @@ def print_piece(piece):
         sys.stdout.write('\n')
 
 
+def parse_dataset(directory, num_voices):
+    files = [os.path.join(directory,f) for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+    pieces = []
+    for f in files:
+        print("Parsing", f)
+        pieces += [assign_voices(parse_midi(f, num_voices))]
+    return pieces
 
 
-print_piece(assign_voices(parse_midi('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/3.mid', 4), debug=True))
+if __name__ == '__main__':
+    piece = parse_midi('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/164.mid', 4, debug=True)
+    piece = assign_voices(piece, debug=True)
+    #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/', 4), 'Data/train.p')
+    #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/validate/', 4), 'Data/validate.p')
+    #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/test/', 4), 'Data/test.p')
+    
 
 
 
