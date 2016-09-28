@@ -1,0 +1,34 @@
+Research Notes:
+
+I plan to take notes pretty often on what I'm doing with honors.
+
+Sunday, 9/11/16
+
+The second week of the semester is over now. I didn't do anything the first week, and the second week I made a schedule and started working on midi_parser.py
+I'm now realizing that my dataset from UMontreal does not have note on/off for the same pitch if the voice switches. This makes sense, since it reduces the size of the midi file without impacting the sound at all, but it's bad for me because I need to split those notes up somehow. My algorithm with voice crossing and voice overlap not allowed works, though, so as soon as I solve this problem, I'll be done cleaning the data I've got.
+
+Tuesday 9/13/16
+
+More bug fixes to midi_parser.py. Hopefully, I can finish this up by tomorrow/thursday and start on real ML
+
+Wednesday 9/14/16
+
+Works! A few edits to the way I was setting upper/lower bounds made it guess correctly on examples most of the time, when it doesn't know, though, I should make it choose closest voice not lowest
+
+Thursday 9/15/16
+
+I messed up huge. While opening parse_midi.py, I saw there was a swap file and overwrote whatever was in the swap file without really thinking. That was an early version of the program that didn't do anything, I lost all of my work. I got some of it back using the parse_midi.py~ file that vim creates as a backup, but that was still from Tuesday. I lost a few hours of work. I'm going to try to get all of that done again today.
+
+I managed to fix all of the lost stuff, but now I'm running into a problematic passage that no amount of algorithm can fix. I've got a crazy idea: when the rules don't specify, randomly choose a voice and continue - that way it will probably get the right answer at some point.
+
+Friday 9/16/16
+
+I did a bit of reorganization today and also explored additional training sets, I just want to account for everything while writing code for models. I'm currently looking at Music21, a library for music information retrival from MIT that has a bunch of bach and palestrina and other stuff that I might find useful.
+
+Saturday 9/17/16
+
+I started working on the generative model today, and quickly realized I was unsure what I wanted to accomplish. The easy answer is to say that I want to try a bunch of things, but I'm not sure. For now, I'm going with the idea that given the previous timestep and the current timestep in some number of voices, I want to predict the next time step of another voice.
+
+Wednesday 9/21/16
+
+I kept working on the generative model a bit, and read a cool article by Anna Jordanous on evaluating computational creativity research.

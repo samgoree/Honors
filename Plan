@@ -1,0 +1,27 @@
+I want to generate music using deep learning techniques.
+
+Specifically, I want to work on counterpoint, since that has traditionally been
+the topic of interest for people in this field.
+
+How do I generate counterpoint? I need a system that will take in a musical
+context (previous note, concurrent note(s) in other voices) and output a note for
+this voice.
+
+I can get data from midi on the internet, but I need specifically counterpoint.
+I also need a way to extract voice information from pieces, which is easier
+said than done.
+
+I've found a set of Bach chorales - this is the sort of thing I'm looking for,
+since it's super regular and easily divided into voices (top voice is always soprano, etc.)
+
+http://www-etud.iro.umontreal.ca/~boulanni/icml2012
+
+Current Schedule/Plan:
+
+9/5-9/16: Figure out midi parsing and create a cleaned dataset
+9/19-9/30: Make a simple generative model
+October: Experiment with different note encodings and product of experts model
+November: Experiment with autoencoders/multi-layer autoencoders with longer feature time "lengths"
+December: Continue with anything interesting I find, possibly more voices/rhythmic granularity?
+January: Continue messing around, write up whatever works
+February: Run survey of results with con students: which generated music sounds most like Bach? Which do you like the most?
