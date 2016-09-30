@@ -204,8 +204,24 @@ if __name__ == '__main__':
     
 
 # piece should be a list of voices, each voice should be a list of Notes
-#def output_midi(piece):
-
+# path should be a string to the location for the midi file
+def output_midi(piece, path):
+    events = []
+    # collect all of the midi events from the piece
+    for voice in piece:
+        for note in voice:
+            events.append((note.start_time, note.num, 'note_on'))
+            events.append((note.stop_time, note.num, 'note_off'))
+    # sort them in time order
+    sorted(events, key=lambda n: n[0])
+    mid = mido.MidiFile()
+    track = mido.MidiTrack()
+    mid.tracks.append(track)
+    prev_time=0
+    for event in events:
+        track.append(mido.Message(event[2], note=int(event[1]), velocity=60, time=int(event[0] - prev_time)))
+        prev_time = event[0]
+    mid.save(path)
 
 
 

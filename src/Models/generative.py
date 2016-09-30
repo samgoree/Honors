@@ -4,7 +4,8 @@
 import sys
 sys.path.append('/usr/users/quota/students/18/sgoree/Honors/src/')
 
-import Utilities.note
+from Utilities.note import Note
+from Utilities.midi_parser_random import output_midi
 
 import pickle
 import fractions
@@ -48,7 +49,36 @@ def load_dataset(filepath):
 			for note in voice:
 				timestep_data[i][j,note.start_time//gcd:note.stop_time//gcd, note.num-min_num] = 1
 	# return the list of lists of lists of timesteps, the min num and max num
-	return timestep_data, min_num, max_num
+	return timestep_data, min_num, max_num, gcd
+
+# takes a list of one-hot encoded timesteps
+# the midi number of the 0-position encoding
+# the length of a timestep
+# outputs a list of notes
+def timesteps_to_notes(one_hot_voice, min_num, timestep_length):
+	voice = onehot_matrix_to_int_vector(one_hot_voice)
+	i = 0
+	curr_note = None
+	curr_time = 0
+	notes = []
+	while i < len(voice):
+		curr_time += timestep_length
+		if curr_note is not None and voice[i] == curr_note.num:
+			i+=1
+		elif curr_note is not None:
+			curr_note.stop_time = curr_time
+			notes.append(curr_note)
+			if voice[i] == -1:
+				curr_note = None
+			else:
+				curr_note = Note(voice[i], curr_time)
+			i+=1
+		else:
+			if voice[i] != -1:
+				curr_note = Note(voice[i], curr_time)
+			i+=1
+	return notes
+
 
 # initial try at this, I'll probably refactor later
 # input is one-hot encodings for voices from this timestep and the previous
@@ -135,17 +165,20 @@ def onehot_matrix_to_int_vector(onehot):
 	return np.array(output)
 
 def train():
-	dataset, min_num, max_num = load_dataset("/usr/users/quota/students/18/sgoree/Honors/Data/train.p")
+	dataset, min_num, max_num, timestep_length = load_dataset("/usr/users/quota/students/18/sgoree/Honors/Data/train.p")
 	train, generate = build_model(min_num, max_num, len(dataset[0]), 3)
 	print("Training...")
 	# main training loop
 	for epoch in range(1, 250):
+		cost = 0.
 		for piece in dataset:
-			train(piece)
-		if epoch% 10 == 1:
-			print("epoch: ", epoch)
+			cost += train(piece)[0]
+		if epoch% 20 == 0:
+			print("epoch: ", epoch, "cost: ", str(cost/len(dataset)))
 			sample_piece = dataset[np.random.randint(0,len(dataset))]
 			for voice in sample_piece:
 				print(onehot_matrix_to_int_vector(voice))
-			print(onehot_matrix_to_int_vector(generate(sample_piece)[0]))
+			new_voice = generate(sample_piece)[0]
+			output_midi([timesteps_to_notes(new_voice, min_num, timestep_length)], '/usr/users/quota/students/18/sgoree/Honors/Data/Output/generative/epoch' + str(epoch) + '.mid')
+
 train()

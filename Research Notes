@@ -40,3 +40,20 @@ Sorry for few notes the past few days, I didn't do much work, mostly debugging t
 Other than that, the GRE went well and I'm on my way. If I want to sample from a custom distribution over discrete categories, how do I do that? Never mind, it was in some old code I had written, rng.choice lets you pass in a distribution. Now I'm trying to figure out a mismatched type error
 
 Nope, I called the wrong function.
+
+Got the model working! It produces output! I'm going to work on a way to output midi instead of midi numbers.
+
+And I did that, what a productive evening! I'm going home.
+
+Friday 9/30/16
+
+It did the thing! I have results from the simple generative model. They're not very good.
+
+TODO:
+Mini-batch training seems like a must
+Refactor to allow for modular note encodings
+Product-of-experts (rhythm, pitch, contour)
+
+Future:
+Autoencoders?
+Convolution across time?
