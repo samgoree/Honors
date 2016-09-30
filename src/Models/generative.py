@@ -2,6 +2,7 @@
 # simple generative model using theano_lstm by Jonathan Raiman
 
 import sys
+import os
 sys.path.append('/usr/users/quota/students/18/sgoree/Honors/src/')
 
 from Utilities.note import Note
@@ -167,6 +168,8 @@ def onehot_matrix_to_int_vector(onehot):
 def train():
 	dataset, min_num, max_num, timestep_length = load_dataset("/usr/users/quota/students/18/sgoree/Honors/Data/train.p")
 	train, generate = build_model(min_num, max_num, len(dataset[0]), 3)
+	output_dir = '/usr/users/quota/students/18/sgoree/Honors/Data/Output/generative/' + strftime("%a, %d %H:%M", localtime())
+	os.mkdir(output_dir)
 	print("Training...")
 	# main training loop
 	for epoch in range(1, 250):
@@ -179,6 +182,6 @@ def train():
 			for voice in sample_piece:
 				print(onehot_matrix_to_int_vector(voice))
 			new_voice = generate(sample_piece)[0]
-			output_midi([timesteps_to_notes(new_voice, min_num, timestep_length)], '/usr/users/quota/students/18/sgoree/Honors/Data/Output/generative/epoch' + str(epoch) + '.mid')
+			output_midi([timesteps_to_notes(new_voice, min_num, timestep_length)], output_dir + str(epoch) + '.mid')
 
 train()
