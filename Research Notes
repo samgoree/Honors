@@ -32,3 +32,11 @@ I started working on the generative model today, and quickly realized I was unsu
 Wednesday 9/21/16
 
 I kept working on the generative model a bit, and read a cool article by Anna Jordanous on evaluating computational creativity research.
+
+Thursday 9/29/16
+
+Sorry for few notes the past few days, I didn't do much work, mostly debugging the generative model (I spent way too long on a bug that ended up being order of operations (a + b * c != (a+b) * c). I also got word back from the two people I had emailed about grad school stuff, they both basically told me to keep shopping around the way I had (and also talk to Bob Keller, which I did). I'm going to let the grad school stuff rest for a week while I get back on track with honors work.
+
+Other than that, the GRE went well and I'm on my way. If I want to sample from a custom distribution over discrete categories, how do I do that? Never mind, it was in some old code I had written, rng.choice lets you pass in a distribution. Now I'm trying to figure out a mismatched type error
+
+Nope, I called the wrong function.

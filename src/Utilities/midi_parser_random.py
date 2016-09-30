@@ -13,6 +13,7 @@ import os
 import pickle
 import random
 
+sys.path.append('/usr/users/quota/students/18/sgoree/Honors/src/')
 
 
 from Utilities.note import *
@@ -182,7 +183,7 @@ def parse_dataset(directory, num_voices):
                 piece_assigned = assign_voices(piece_assigned)
             except KeyboardInterrupt:
                 break
-        pieces += piece_assigned
+        pieces += [piece_assigned[:-1]]
     return pieces
 
 def debug_piece(f):
@@ -196,12 +197,14 @@ def debug_piece(f):
 
 if __name__ == '__main__':
     #debug_piece('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/322.mid') 381
-    pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/', 4), open('Data/train.p', 'wb'))
-    pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/valid/', 4), open('Data/validate.p', 'wb'))
-    pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/test/', 4), open('Data/test.p', 'wb'))
+    training_set = parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/', 4)
+    pickle.dump(training_set, open('../../Data/train.p', 'wb'))
+    #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/valid/', 4), open('../../Data/validate.p', 'wb'))
+    #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/test/', 4), open('../../Data/test.p', 'wb'))
     
 
-
+# piece should be a list of voices, each voice should be a list of Notes
+#def output_midi(piece):
 
 
 
