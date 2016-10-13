@@ -51,9 +51,47 @@ It did the thing! I have results from the simple generative model. They're not v
 
 TODO:
 Mini-batch training seems like a must
+Validation to prevent over-fitting
 Refactor to allow for modular note encodings
 Product-of-experts (rhythm, pitch, contour)
 
 Future:
 Autoencoders?
-Convolution across time?
+Convolution across time? (a la WaveNet)
+
+If I look at the loss function over time, it's not training really at all. I think I messed something up, but I don't know what.
+
+Wednesday 10/5/16
+
+Time to refactor and make sure everything is ok
+
+minibatches - each piece needs to be the same length
+my plan: randomly choose pieces, pick 8-timestep segments from each piece chosen at random
+
+This stuff is done now, but everything's buggy.
+
+I need to learn how convolution actually works - what would a one-dimensional convolution with kernel of size 1xk mean? Maybe I should ask Adam
+
+Anyway, I also read the pixel-rnn article. The math is a bit confusing, but I get the gist of what they are doing.
+
+Thursday 10/6/16
+
+Now I'm getting to the meat of the problem: I'm not storing 2 dimensions of internal state
+
+Should a section actually snag the timestep before as well, so it can feed that in rather than zeros? How can I do that while still allowing the start of a piece to be used?
+Figured it out, doing all of that as processing outside of theano in the training loop, which is probably inefficient, but whatever.
+
+Now I think everything's working with minibatches and validation
+
+Nope! The network is only outputting 10 values per timestep, maybe it wants the input transposed? Nope that breaks it
+
+Wow, it's taking the softmax across the 10 elements of the minibatch, giving a 10% chance of each note in each, which is wrong. What if I transposed before softmaxing on only multidimensional things put into the softmax function?
+
+Thursday 10/13/16
+
+Not much has happened this week, I made some pretty pictures, learned how to use graphviz and finished the machine learning decision tree homework
+I may not get anything done today, Kuperman is out of the office tomorrow and next week is fall break, so my priority is on grad school apps and my resume.
+
+I've modularized out note encodings from training, now I just need to figure it out for generation. I'm going to need new variables, right? Since generation is not (and shouldn't be) minibatched?
+
+Successfully refactored, I'll build product of experts over break some time.
