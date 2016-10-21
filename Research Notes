@@ -95,3 +95,17 @@ I may not get anything done today, Kuperman is out of the office tomorrow and ne
 I've modularized out note encodings from training, now I just need to figure it out for generation. I'm going to need new variables, right? Since generation is not (and shouldn't be) minibatched?
 
 Successfully refactored, I'll build product of experts over break some time.
+
+Monday 10/17/16
+
+Building product of experts piece by piece, it's fall break btw and I hope to actually clock in a few hours this week.
+I like referring to compile-time and run-time as a priori and a posteriori, idk if that's a real thing
+
+Potential problem later down the line: how do I get the multiple different models to communicate while scanning? I need the outputted probabilities from all of them to make a prediction.
+I'm going to have to make a scan that does all of the generative passes in parallel :(
+
+Also TODO: move training loop from generative to a separate file and make it a more general main method, use this to test each individual part of product of experts before combining them
+
+Friday 10/21/16
+
+Tried to modularize the training loop, it's not going to work as well as I had thought, the simple generative and product of experts models want different information as paramters, I need to create wrapper training/validation/testing functions in their classes
