@@ -109,3 +109,48 @@ Also TODO: move training loop from generative to a separate file and make it a m
 Friday 10/21/16
 
 Tried to modularize the training loop, it's not going to work as well as I had thought, the simple generative and product of experts models want different information as paramters, I need to create wrapper training/validation/testing functions in their classes
+
+Saturday 10/22/16
+
+Finished making wrapper functions in classes, debugged first PoE model,  I'm getting the same loss out of it, which makes me think there's something wrong with the way I'm building the neural net. How can I make things more transparent?
+
+Just for fun, I'm going to make an identity model - the loss will be calculated as the difference between the output and input, any neural net no matter how simple should be able to train on the identity function
+
+That has the same problem
+
+I bet I'm multiplying the probabilities of all of the notes together by accident...
+Turns out the way I was doing cost was just totally wrong. I fixed it, now things train!
+
+I also wrote voice contour expert because I'm on a roll today. I'll be back in later, probably, if I have time.
+
+Ooh cool bug - the contour expert had an off by one error, so it was training to predict the current timestep, rather than the next timestep, so the output looked like:
+[ 3  4  4  6  6 10 11 11 13  9 12 12 11 11  9  9  4  7  2  0 -3 -5 -5 -5 -5 -4 -6 -8 -6 -3 -5 -2 -2 -2 -2  2  4  6  7  7  7]
+changing very gradually
+
+Sunday 10/23/16
+
+I'm going to try to do the measure encoding today
+One issue to keep in mind is that the scan functions that I currently have for generative passes aren't going to transfer to the product model, since the random sample needs to be from all of the distributions combined. I'll try to figure out a good way to deal with that
+I also would like to make some visualization of what the output of each expert is
+
+Ooh, I should probably take into account the previous timestep in the contour expert for the sake of consistency
+
+Tuesday 10/25/16
+
+I'm off of break now and have some free time before thursday, so I'm going to try to finish up the rhythm expert and figure out how to stop the contour expert from outputting things outside of the midi range
+I can't focus, this isn't happening today, I'll work on theory or something.
+
+Thursday 10/27/16
+
+I've found a problem with my initial design for GenerativeLSTM, I don't really handle the case where the input encoding is different from the output encoding, or the only input is the output from the previous timestep, particularly well (or modularly enough to support a rhythm model).
+Redesign:
+	input encoding is non-recurrent input encoding
+	output encoding is output/recurrent input encoding
+	if input is None, there's no data coming in, just the previous timestep's output
+	if output is None, it is the same as the input encoding and the two similarly encoded things are concatenated
+
+	The input to the network is input_encoding + output_encoding the output is output_encoding
+
+This product model is going to be harder than I thought: I need to circumvent the cost functions in the individual models' training functions and compile different training functions that take into account the product. To do that, I need the input variables and output probability distribution variables for each model to be visible, which feels a bit rough design-wise.
+This method leads to another issue - all of the models take different inputs, which it seems correct to derive from a single type of input a priori
+My solution is to have the model take a list of strings, rather than a list of instantiated models, as parameter and instantiate all of them internally, using optional parameters for the input theano variable(s)
