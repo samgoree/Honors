@@ -123,31 +123,31 @@ class GenerativeLSTM:
 		raise NotImplementedError("Please use a subclass for your specific model!")
 
 class SimpleGenerative(GenerativeLSTM):
-	def __init__(self, encoding_size, network_shape, num_voices, voice_to_predict):
+	# pieces: minibatch of instances, each instance is a list of voices, each voice is a list of timesteps, each timestep is a 1-hot encoding
+	# prior_timesteps: the timestep before the start of each piece in pieces, prior_timestep.shape[2] should be 1
+	# piece: a full piece to generate the voice_to_predict of
+	def __init__(self, encoding_size, network_shape, num_voices, voice_to_predict, pieces=T.itensor4, prior_timesteps=T.itensor4, piece=T.itensor3):
 		print("Building Simple Generative Model")
 		# variables for training
-		pieces = T.itensor4() # minibatch of instances, each instance is a list of voices, each voice is a list of timesteps, each timestep is a 1-hot encoding
-		prior_timesteps = T.itensor4() # the timestep before the start of each piece in pieces, prior_timestep.shape[2] should be 1
 
 		full_pieces = T.sum(pieces, axis=1) # one-hot encoding of pitches for each timestep for each piece
-		gen_input = (T.sum(pieces[:,0:voice_to_predict], axis=1)
+		curr_notes = (T.sum(pieces[:,0:voice_to_predict], axis=1)
 			+ T.sum(pieces[:,voice_to_predict+1:], axis=1)) if voice_to_predict + 1 < num_voices else T.sum(pieces[:,0:voice_to_predict], axis=1)
 
 		# should be three dimensions, pieces, time, pitch
 		prev_notes = T.concatenate([T.sum(prior_timesteps, axis=1), full_pieces[:, :-1]], axis=1)
-		curr_notes = gen_input
 	
 
 		# stuff for generation
-		piece = T.itensor3() # a full piece
+		
 		full_piece = T.sum(piece, axis=0)
 		gen_input = (T.sum(piece[0:voice_to_predict], axis=0) 
 			+ T.sum(piece[voice_to_predict+1:], axis=0)) if voice_to_predict + 1 < num_voices else T.sum(piece[0:voice_to_predict], axis=0)
 
-		generated_probs, generated_piece, rng_updates = super(SimpleGenerative, self).__init__(encoding_size, None, network_shape, prev_notes, curr_notes,gen_input)
+		self.generated_probs, generated_piece, rng_updates = super(SimpleGenerative, self).__init__(encoding_size, None, network_shape, prev_notes, curr_notes,gen_input)
 
 		mask = pieces[:,voice_to_predict]
-		cost = -T.sum(T.log((generated_probs * mask).nonzero_values()))
+		cost = -T.sum(T.log((self.generated_probs * mask).nonzero_values()))
 
 		updates, gsums, xsums, lr, max_norm  = theano_lstm.create_optimization_updates(cost, self.model.params, method='adadelta')
 		self.train_internal = theano.function([pieces, prior_timesteps], cost, updates=updates, allow_input_downcast=True)

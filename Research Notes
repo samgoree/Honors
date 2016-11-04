@@ -154,3 +154,14 @@ Redesign:
 This product model is going to be harder than I thought: I need to circumvent the cost functions in the individual models' training functions and compile different training functions that take into account the product. To do that, I need the input variables and output probability distribution variables for each model to be visible, which feels a bit rough design-wise.
 This method leads to another issue - all of the models take different inputs, which it seems correct to derive from a single type of input a priori
 My solution is to have the model take a list of strings, rather than a list of instantiated models, as parameter and instantiate all of them internally, using optional parameters for the input theano variable(s)
+
+I gave up on coding for the night and read some papers
+https://arxiv.org/pdf/1511.07122v3.pdf - Introduces dilated convolutions for image context aggregation (like identifying which pixels are part of objects in images)
+I should ask either Adam or Tom/Alexa to explain some of the math notation involved in defining convolution, this is the technique used in the WaveNet paper
+
+The idea I have going forward is to build a denoising autoencoder http://deeplearning.net/tutorial/dA.html, then use dilated convolution to predict things rather than a recurrent predictive model.
+
+Thursday 11/3/16
+
+Didn't do much this past week, work on PoE model
+Now I'm faced with the generation loop for the product model. This is hard, I need to take the product of all of the experts within the body of the scan step function, which means using a for loop with all of the cases -_-

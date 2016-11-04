@@ -103,7 +103,7 @@ def train(model_name):
 		model = RhythmExpert(240*4//timestep_length, max_num-min_num, [100,200,100], 3)
 	else:
 		print("Unknown Model")
-		sys.exit(0)
+		sys.exit(1)
 	output_dir = '/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name +'/' + strftime("%a,%d,%H:%M", localtime())+ '/'
 	if not os.path.exists('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name): os.mkdir('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name)
 	#os.mkdir(output_dir)

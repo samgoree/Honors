@@ -9,3 +9,6 @@ http://link.springer.com/article/10.1007/s12559-012-9156-1/fulltext.html - evalu
 
 https://arxiv.org/pdf/1609.03499.pdf - Google WaveNet
 https://arxiv.org/pdf/1601.06759v3.pdf - image model wavenet is based on (more theory)
+https://arxiv.org/pdf/1511.07122v3.pdf - setup of dilated convolutions involved in WaveNet
+
+http://www.cs.toronto.edu/~hinton/absps/nccd.pdf - Hinton, product of experts
