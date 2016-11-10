@@ -165,3 +165,15 @@ Thursday 11/3/16
 
 Didn't do much this past week, work on PoE model
 Now I'm faced with the generation loop for the product model. This is hard, I need to take the product of all of the experts within the body of the scan step function, which means using a for loop with all of the cases -_-
+
+Tuesday 11/8/16
+
+Election day! It's looking like Hillary will win, but still stress (future archaeologists looking back on these research notes will either laugh at my nerves or my naivete)
+Another complication arose - I can't pass a 2d list of hidden layer values recurrently into scan, I need to figure out exactly how many hidden layers to deal with everywhere
+Figured that out by using a list of partitions, computed a priori
+Now there's just a mountain of debugging to do, I'll hopefully come back later today to continue working on it
+
+Thursday 11/10/16
+
+Whelp everything is awful in the world
+In terms of honors stuff, though, debugging goes smoothly this morning

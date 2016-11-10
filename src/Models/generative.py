@@ -35,7 +35,7 @@ class GenerativeLSTM:
 	# output_encoding_size is the same is input_encoding_size if left None
 	# gen_length is by default the length of gen_input, but if that is None, it should be a specified theano scalar specifying how many timesteps to generate.
 	# returns a tensor of the same shape of prev_notes that is the outputted probabilties, a tensor of the same shape as all_but_one voice and the random variable updates for generation
-	def __init__(self, input_encoding_size, output_encoding_size, network_shape, prev_notes, curr_notes, gen_input, gen_length=None):
+	def __init__(self, input_encoding_size, output_encoding_size, network_shape, prev_notes, curr_notes, gen_input, gen_length=None, rng=None):
 		print("Building a generative model")
 		
 		# handle encoding size modularity
@@ -54,7 +54,7 @@ class GenerativeLSTM:
 		self.model = theano_lstm.StackedCells(input_encoding, layers=network_shape, activation=T.tanh, celltype=theano_lstm.LSTM)
 		self.model.layers[0].in_gate2_activation = lambda x: x
 		self.model.layers.append(theano_lstm.Layer(network_shape[-1], output_encoding, lambda x: T.nnet.softmax(x.T).T if x.ndim > 1 else T.nnet.softmax(x)[0]))
-		rng = theano.tensor.shared_randomstreams.RandomStreams()
+		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
 
 
 		# step function for theano scan - body of the symbolic for loop
@@ -126,7 +126,7 @@ class SimpleGenerative(GenerativeLSTM):
 	# pieces: minibatch of instances, each instance is a list of voices, each voice is a list of timesteps, each timestep is a 1-hot encoding
 	# prior_timesteps: the timestep before the start of each piece in pieces, prior_timestep.shape[2] should be 1
 	# piece: a full piece to generate the voice_to_predict of
-	def __init__(self, encoding_size, network_shape, num_voices, voice_to_predict, pieces=T.itensor4, prior_timesteps=T.itensor4, piece=T.itensor3):
+	def __init__(self, encoding_size, network_shape, num_voices, voice_to_predict, pieces=T.itensor4, prior_timesteps=T.itensor4, piece=T.itensor3, rng=None):
 		print("Building Simple Generative Model")
 		# variables for training
 
@@ -144,7 +144,7 @@ class SimpleGenerative(GenerativeLSTM):
 		gen_input = (T.sum(piece[0:voice_to_predict], axis=0) 
 			+ T.sum(piece[voice_to_predict+1:], axis=0)) if voice_to_predict + 1 < num_voices else T.sum(piece[0:voice_to_predict], axis=0)
 
-		self.generated_probs, generated_piece, rng_updates = super(SimpleGenerative, self).__init__(encoding_size, None, network_shape, prev_notes, curr_notes,gen_input)
+		self.generated_probs, generated_piece, rng_updates = super(SimpleGenerative, self).__init__(encoding_size, None, network_shape, prev_notes, curr_notes,gen_input, rng=rng)
 
 		mask = pieces[:,voice_to_predict]
 		cost = -T.sum(T.log((self.generated_probs * mask).nonzero_values()))

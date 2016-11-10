@@ -8,7 +8,7 @@ from Utilities.note import Note
 from Utilities.midi_parser_random import output_midi
 from Models.generative import *
 from Models.identity import Identity
-from Models.product_of_experts import VoiceSpacingExpert, VoiceContourExpert, RhythmExpert
+from Models.product_of_experts import VoiceSpacingExpert, VoiceContourExpert, RhythmExpert, MultiExpert
 
 import pickle
 import fractions
@@ -101,11 +101,13 @@ def train(model_name):
 		model = VoiceContourExpert(max_num-min_num, [100,200,100], 3)
 	elif model_name == 'RhythmExpert':
 		model = RhythmExpert(240*4//timestep_length, max_num-min_num, [100,200,100], 3)
+	elif model_name == 'MultiExpert':
+		model = MultiExpert(['SimpleGenerative', 'VoiceSpacingExpert', 'VoiceContourExpert', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length)
 	else:
 		print("Unknown Model")
 		sys.exit(1)
 	output_dir = '/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name +'/' + strftime("%a,%d,%H:%M", localtime())+ '/'
-	if not os.path.exists('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name): os.mkdir('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name)
+	#if not os.path.exists('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name): os.mkdir('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name)
 	#os.mkdir(output_dir)
 
 	# make validation set
@@ -124,7 +126,7 @@ def train(model_name):
 
 	print("Training...")
 	# main training loop
-	minibatch_count = 1
+	minibatch_count = 0
 	best_loss = np.inf
 	terminate = False
 	while not terminate:
@@ -153,4 +155,4 @@ def train(model_name):
 		minibatch_count += 1
 
 if __name__=='__main__':
-	train('RhythmExpert')
+	train('MultiExpert')

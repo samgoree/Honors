@@ -14,7 +14,7 @@ class Identity(GenerativeLSTM):
 		# stuff for generation
 		gen_length = piece.shape[1] # length of a generated sample - parameter to generation call
 
-		self.generated_probs, generated_voice, rng_updates = super(Identity, self).__init__(encoding_size, network_shape, one_voice, None, None, gen_length)
+		self.generated_probs, generated_voice, rng_updates = super(Identity, self).__init__(encoding_size, encoding_size, network_shape, one_voice, None, None, gen_length)
 
 		mask = pieces[:,voice_to_predict]
 		cost = -T.sum(T.log((self.generated_probs * mask).nonzero_values()))
