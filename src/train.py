@@ -107,8 +107,8 @@ def train(model_name):
 		print("Unknown Model")
 		sys.exit(1)
 	output_dir = '/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name +'/' + strftime("%a,%d,%H:%M", localtime())+ '/'
-	#if not os.path.exists('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name): os.mkdir('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name)
-	#os.mkdir(output_dir)
+	if not os.path.exists('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name): os.mkdir('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name)
+	os.mkdir(output_dir)
 
 	# make validation set
 	validation_pieces = np.random.choice(len(dataset), size=len(dataset)//3, replace=False)
@@ -126,7 +126,7 @@ def train(model_name):
 
 	print("Training...")
 	# main training loop
-	minibatch_count = 0
+	minibatch_count = 1
 	best_loss = np.inf
 	terminate = False
 	while not terminate:
@@ -137,7 +137,7 @@ def train(model_name):
 		# every 20 minibatches, validate
 		if minibatch_count % 40 == 0:
 			print("Minibatch ", minibatch_count)
-			pieces = np.random.choice(len(validation_set), size=minibatch_number, replace=False)
+			pieces = np.arange(len(validation_set))
 			# validate
 			loss = model.validate(pieces, validation_set, minibatch_size)
 			print("Loss: ", loss)

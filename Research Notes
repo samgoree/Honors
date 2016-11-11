@@ -177,3 +177,5 @@ Thursday 11/10/16
 
 Whelp everything is awful in the world
 In terms of honors stuff, though, debugging goes smoothly this morning
+It works! Now I'm super super overfitting
+I'm instead going to validate on the entire validation set to avoid issues like this

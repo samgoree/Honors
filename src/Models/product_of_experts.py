@@ -335,9 +335,9 @@ class MultiExpert:
 		all_but_one_voice = (T.sum(piece[0:voice_to_predict], axis=0) 
 			+ T.sum(piece[voice_to_predict+1:], axis=0)) if voice_to_predict + 1 < num_voices else T.sum(piece[0:voice_to_predict], axis=0)
 		known_voice_number = 0 # beware - magic number! Maybe should change later??
-		known_voice = piece[:,known_voice_number] # first dimension is time, then pitch
-		unknown_voice = piece[:,voice_to_predict] # same as above
-		beat_info = int_vector_to_onehot_symbolic(T.arange(0, piece.shape[0]) % self.rhythm_encoding_size, self.rhythm_encoding_size)
+		known_voice = piece[known_voice_number] # first dimension is time, then pitch
+		unknown_voice = piece[voice_to_predict] # same as above
+		beat_info = int_vector_to_onehot_symbolic(T.arange(0, unknown_voice.shape[0]) % self.rhythm_encoding_size, self.rhythm_encoding_size)
 
 
 		def step(concurrent_notes, prev_concurrent_notes, known_voice, prev_known_voice, current_beat, prev_note, prev_prev_note, *prev_hiddens):
@@ -357,18 +357,16 @@ class MultiExpert:
 								- onehot_to_int(prev_known_voice)], 1)
 					model_states = model.model.forward(prev_spacing, prev_hiddens[hidden_partitions[i]:hidden_partitions[i+1]])
 					new_states += model_states[:-1]
-					probs.append(model_states[-1])
 					# changes the generated probs (which here are voice spacing) into absolute pitch by rolling the subtensors corresponding to each timestep in each instance by the value of the reference voice
-					probs.append(T.roll(new_states[-1], onehot_to_int(known_voice)))
+					probs.append(T.roll(model_states[-1], onehot_to_int(known_voice)))
 				elif e == 'VoiceContourExpert':
 					# this one fires on the difference between the previous two notes
-					prev_contour = T.set_subtensor(T.zeros_like(prev_note)[onehot_to_int(prev_note) - onehot_to_int(prev_prev_note) + self.pitch_encoding_size], 1)
+					prev_contour = T.set_subtensor(T.zeros([prev_note.shape[0]*2])[onehot_to_int(prev_note) - onehot_to_int(prev_prev_note)], 1)
 					model_states = model.model.forward(prev_contour, prev_hiddens[hidden_partitions[i]:hidden_partitions[i+1]])
 					new_states += model_states[:-1]
-					probs.append(T.roll(model_states[-1], onehot_to_int(prev_note) - self.pitch_encoding_size))
+					probs.append(T.roll(model_states[-1], onehot_to_int(prev_note) - self.pitch_encoding_size)[self.pitch_encoding_size//2:(self.pitch_encoding_size*3)//2])
 
 				elif e == 'RhythmExpert':
-					print(prev_note, current_beat)
 					model_states= model.model.forward(T.concatenate([prev_note, current_beat]), prev_hiddens[hidden_partitions[i]:hidden_partitions[i+1]])
 					new_states += model_states[:-1]
 					probs.append(model_states[-1])
@@ -393,7 +391,7 @@ class MultiExpert:
 									outputs_info=[dict(initial=T.zeros([2, self.pitch_encoding_size], dtype='int64'), taps=[-1,-2])] + [dict(initial=layer.initial_hidden_state, taps=[-1])
 				for layer in all_layers if hasattr(layer, 'initial_hidden_state')])
 
-		self.generate_internal  = theano.function([piece], results, updates=gen_updates, allow_input_downcast=True)
+		self.generate_internal  = theano.function([piece], results[0], updates=gen_updates, allow_input_downcast=True)
 
 
 	def train(self, pieces, training_set, minibatch_size):
