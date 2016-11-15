@@ -327,8 +327,8 @@ class MultiExpert:
 		updates, gsums, xsums, lr, max_norm  = theano_lstm.create_optimization_updates(cost, params, method='adadelta')
 
 		# compile training and validation functions for the product model
-		self.train_internal = theano.function([pieces, prior_timesteps, timestep_info], cost, updates=updates, allow_input_downcast=True)
-		self.validate_internal = theano.function([pieces,prior_timesteps, timestep_info], cost, allow_input_downcast=True)
+		self.train_internal = theano.function([pieces, prior_timesteps, timestep_info], cost, updates=updates, allow_input_downcast=True, on_unused_input='ignore')
+		self.validate_internal = theano.function([pieces,prior_timesteps, timestep_info], cost, allow_input_downcast=True, on_unused_input='ignore')
 
 		# generation is hard
 
@@ -391,7 +391,7 @@ class MultiExpert:
 									outputs_info=[dict(initial=T.zeros([2, self.pitch_encoding_size], dtype='int64'), taps=[-1,-2])] + [dict(initial=layer.initial_hidden_state, taps=[-1])
 				for layer in all_layers if hasattr(layer, 'initial_hidden_state')])
 
-		self.generate_internal  = theano.function([piece], results[0], updates=gen_updates, allow_input_downcast=True)
+		self.generate_internal  = theano.function([piece], results[0], updates=gen_updates, allow_input_downcast=True, on_unused_input='ignore')
 
 
 	def train(self, pieces, training_set, minibatch_size):

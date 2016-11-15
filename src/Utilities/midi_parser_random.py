@@ -170,17 +170,17 @@ def print_piece(piece):
         sys.stdout.write('\n')
 
 
-def parse_dataset(directory, num_voices):
+def parse_dataset(directory, num_voices, debug=False):
     files = [os.path.join(directory,f) for f in sorted(os.listdir(directory)) if os.path.isfile(os.path.join(directory, f))]
     pieces = []
     for f in files:
-        piece = parse_midi(f, num_voices)
+        piece = parse_midi(f, num_voices, debug)
         piece_assigned = copy.deepcopy(piece)
         while len(piece_assigned[-1]) > 0:
             try:
                 print("Parsing", f)
                 piece_assigned = copy.deepcopy(piece)
-                piece_assigned = assign_voices(piece_assigned)
+                piece_assigned = assign_voices(piece_assigned, debug)
             except KeyboardInterrupt:
                 break
         pieces += [piece_assigned[:-1]]
@@ -195,12 +195,15 @@ def debug_piece(f):
         piece_assigned = copy.deepcopy(piece)
         piece_assigned = assign_voices(piece_assigned, debug=True)
 
-if __name__ == '__main__':
+"""if __name__ == '__main__':
     #debug_piece('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/322.mid') 381
     training_set = parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/train/', 4)
     pickle.dump(training_set, open('../../Data/train.p', 'wb'))
     #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/valid/', 4), open('../../Data/validate.p', 'wb'))
-    #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/test/', 4), open('../../Data/test.p', 'wb'))
+    #pickle.dump(parse_dataset('/usr/users/quota/students/18/sgoree/Downloads/JSB Chorales/test/', 4), open('../../Data/test.p', 'wb'))"""
+if __name__=='__main__':
+    anthems_set = parse_dataset('/usr/users/quota/students/18/sgoree/Desktop/midi/national_anthems/', 4, debug=True)
+
     
 
 # piece should be a list of voices, each voice should be a list of Notes

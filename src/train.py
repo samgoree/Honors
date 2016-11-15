@@ -88,7 +88,7 @@ def timesteps_to_notes(one_hot_voice, min_num, timestep_length):
 	return notes
 
 
-def train(model_name):
+def train(model_name, visualize=False):
 	dataset, min_num, max_num, timestep_length = load_dataset("/usr/users/quota/students/18/sgoree/Honors/Data/train.p", "/usr/users/quota/students/18/sgoree/Honors/Data/validate.p")
 	
 	if model_name == 'SimpleGenerative':
@@ -103,6 +103,10 @@ def train(model_name):
 		model = RhythmExpert(240*4//timestep_length, max_num-min_num, [100,200,100], 3)
 	elif model_name == 'MultiExpert':
 		model = MultiExpert(['SimpleGenerative', 'VoiceSpacingExpert', 'VoiceContourExpert', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length)
+	elif model_name == 'justSpacingContour':
+		model = MultiExpert(['VoiceSpacingExpert', 'VoiceContourExpert'], 4, 3,  min_num, max_num, timestep_length)
+	elif model_name == 'justSimpleRhythm':
+		model = MultiExpert(['SimpleGenerative', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length)
 	else:
 		print("Unknown Model")
 		sys.exit(1)
@@ -135,7 +139,7 @@ def train(model_name):
 		# train
 		print('Minibatch', minibatch_count, ": ", model.train(pieces, training_set, minibatch_size))
 		# every 20 minibatches, validate
-		if minibatch_count % 40 == 0:
+		if minibatch_count % 10 == 0:
 			print("Minibatch ", minibatch_count)
 			pieces = np.arange(len(validation_set))
 			# validate
@@ -146,7 +150,7 @@ def train(model_name):
 				print("Loss increasing, finishing training...")
 				terminate = True
 		# every 100 minibatches, sample a piece
-		if minibatch_count % 200 == 0 or terminate:
+		if minibatch_count % 50 == 0 or terminate:
 			print("Minibatch", str(minibatch_count), " sampling...")
 			sample_piece = training_set[np.random.randint(len(training_set))]
 			new_voice = model.generate(sample_piece)
@@ -155,4 +159,4 @@ def train(model_name):
 		minibatch_count += 1
 
 if __name__=='__main__':
-	train('MultiExpert')
+	train('justSimpleRhythm', visualize=True)

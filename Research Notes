@@ -179,3 +179,35 @@ Whelp everything is awful in the world
 In terms of honors stuff, though, debugging goes smoothly this morning
 It works! Now I'm super super overfitting
 I'm instead going to validate on the entire validation set to avoid issues like this
+
+Friday 11/11/16
+
+Current open things to improve:
+	output polyphonic music
+	modularize multi-expert model and remove some of the magic numbers that made it work
+	implement visualizer
+	implement test
+	write a script to test different architectures, including just regression, each subcombination, the multiple voice spacing models
+
+
+I did some preliminary experiments(just tried stuff out) and found that spacing + contour is the magic, it reduces error so fast, neither the simple generative nor the rhythm model seem to help much
+
+I'm also looking for more data. This model fits very well, and I'd like to see what it does with a harder problem than bach chorales
+I found this big collection of midi: https://www.reddit.com/r/datasets/comments/3akhxy/the_largest_midi_collection_on_the_internet/
+it seems too heterogeneous on its own, but I may be able to get something out of it
+
+http://musedata.stanford.edu/ is another possible good source
+
+Monday 11/14/16
+The national anthems dataset from the midi collection is a little harder to parse, but I think it might work. Benefit: Voices are split into separate channels based on instrument, though sometimes they overlap. The goal with this dataset is definitely to sound realistic, rather than serve as a score
+
+My plan of action, then, is to get more nice-looking bach midi
+or another composer, that would be fine
+
+Challenges here:
+	Quantization - can I round midi timestamps to nice numbers?
+	More than 4 voices - my neural net architecture should be fine for, say, 18 voices, it just means I need to handle voices dynamically rather than statically
+
+Tuesday 11/15/16
+
+I'm going to write a testing framework that comes up with a visualization of each "expert" and their relative weights, and also graphs loss vs. minibatch number
