@@ -6,6 +6,7 @@ import os
 
 from Utilities.note import Note
 from Utilities.midi_parser_random import output_midi
+from Utilities.visualizer import visualize_multiexpert
 from Models.generative import *
 from Models.identity import Identity
 from Models.product_of_experts import VoiceSpacingExpert, VoiceContourExpert, RhythmExpert, MultiExpert
@@ -24,6 +25,7 @@ import numpy as np
 np.set_printoptions(threshold=np.inf)
 
 epsilon = 10e-9
+
 
 # takes the path to a pickle file
 # assumes the pickled object is python list of pieces, where each piece is a list of voices and each voice is a list of notes.
@@ -102,14 +104,15 @@ def train(model_name, visualize=False):
 	elif model_name == 'RhythmExpert':
 		model = RhythmExpert(240*4//timestep_length, max_num-min_num, [100,200,100], 3)
 	elif model_name == 'MultiExpert':
-		model = MultiExpert(['SimpleGenerative', 'VoiceSpacingExpert', 'VoiceContourExpert', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length)
+		model = MultiExpert(['SimpleGenerative', 'VoiceSpacingExpert', 'VoiceContourExpert', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length, transparent=visualize)
 	elif model_name == 'justSpacingContour':
-		model = MultiExpert(['VoiceSpacingExpert', 'VoiceContourExpert'], 4, 3,  min_num, max_num, timestep_length)
+		model = MultiExpert(['VoiceSpacingExpert', 'VoiceContourExpert'], 4, 3,  min_num, max_num, timestep_length, transparent=visualize)
 	elif model_name == 'justSimpleRhythm':
-		model = MultiExpert(['SimpleGenerative', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length)
+		model = MultiExpert(['SimpleGenerative', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length, transparent=visualize)
 	else:
 		print("Unknown Model")
 		sys.exit(1)
+	
 	output_dir = '/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name +'/' + strftime("%a,%d,%H:%M", localtime())+ '/'
 	if not os.path.exists('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name): os.mkdir('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name)
 	os.mkdir(output_dir)
@@ -130,7 +133,7 @@ def train(model_name, visualize=False):
 
 	print("Training...")
 	# main training loop
-	minibatch_count = 1
+	minibatch_count = 0
 	best_loss = np.inf
 	terminate = False
 	while not terminate:
@@ -143,7 +146,12 @@ def train(model_name, visualize=False):
 			print("Minibatch ", minibatch_count)
 			pieces = np.arange(len(validation_set))
 			# validate
-			loss = model.validate(pieces, validation_set, minibatch_size)
+			if visualize:
+				loss, minibatch, prior_timesteps, timestep_info = model.validate(pieces, validation_set, minibatch_size)
+				if not os.path.exists(output_dir + 'visualize/'): os.mkdir(output_dir + 'visualize/')
+				visualize_multiexpert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) +'/')
+			else:
+				loss = model.validate(pieces, validation_set, minibatch_size)
 			print("Loss: ", loss)
 			if loss < best_loss + epsilon: best_loss = loss
 			else:
@@ -159,4 +167,4 @@ def train(model_name, visualize=False):
 		minibatch_count += 1
 
 if __name__=='__main__':
-	train('justSimpleRhythm', visualize=True)
+	train('MultiExpert', visualize=True)

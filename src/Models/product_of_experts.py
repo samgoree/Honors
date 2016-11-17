@@ -3,6 +3,7 @@
 
 from Models.generative import *
 from Models.identity import Identity
+from Utilities.visualizer import visualize_multiexpert
 from sys import exit
 
 def onehot_to_int(onehot):
@@ -249,10 +250,10 @@ class MultiExpert:
 	# timestep_info is the rhythm information about pieces
 	# piece is for generation, a full piece, first dimension is voice, second is time, third is pitch
 	def __init__(self, expert_types, num_voices, voice_to_predict,  min_num, max_num, timestep_length,
-					pieces=T.itensor4(), prior_timesteps=T.itensor4(), timestep_info=T.itensor3(), piece=T.itensor3(), rng=None):
+					pieces=T.itensor4(), prior_timesteps=T.itensor4(), timestep_info=T.itensor3(), piece=T.itensor3(), rng=None, transparent=False):
 		print("Building a multi-expert")
 		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
-
+		self.transparent = transparent
 
 		self.rhythm_encoding_size = 240*4//timestep_length
 		self.pitch_encoding_size = max_num - min_num
@@ -300,10 +301,10 @@ class MultiExpert:
 			params += model.model.params
 
 		# get product weight shared variables
-		product_weight = []
+		self.product_weight = []
 		for i in range(len(expert_probs)):
-			product_weight.append(theano.shared(1.0)) # all experts are initially weighted the same, it's up to gradient descent to figure it out
-		params += product_weight
+			self.product_weight.append(theano.shared(1.0)) # all experts are initially weighted the same, it's up to gradient descent to figure it out
+		params += self.product_weight
 
 		# calculate cost for the product symbolically
 		un_normalized_product = T.ones_like(expert_probs[0])
@@ -311,7 +312,7 @@ class MultiExpert:
 		# take the product
 
 		for i,tensor in enumerate(expert_probs):
-			power = tensor ** product_weight[i]
+			power = tensor ** self.product_weight[i]
 			un_normalized_product = un_normalized_product * power
 		# for each element of the product (remember, it's a tensor), figure out the normalizing factor
 		
@@ -329,6 +330,13 @@ class MultiExpert:
 		# compile training and validation functions for the product model
 		self.train_internal = theano.function([pieces, prior_timesteps, timestep_info], cost, updates=updates, allow_input_downcast=True, on_unused_input='ignore')
 		self.validate_internal = theano.function([pieces,prior_timesteps, timestep_info], cost, allow_input_downcast=True, on_unused_input='ignore')
+
+		# if we're being transparent (slightly slower setup), we make some more functions
+		if transparent:
+			self.internal_probs = []
+			for model_name, probs in zip(expert_types, expert_probs):
+				self.internal_probs.append((model_name, theano.function([pieces,prior_timesteps, timestep_info], probs, allow_input_downcast=True, on_unused_input='ignore')))
+			self.internal_final_prob = theano.function([pieces, prior_timesteps, timestep_info], self.generated_probs, allow_input_downcast=True, on_unused_input='ignore')
 
 		# generation is hard
 
@@ -414,6 +422,7 @@ class MultiExpert:
 
 	# pieces is an array of ints corresponding to indicies of the pieces selected from training_set
 	def validate(self, pieces, validation_set, minibatch_size):
+		print("Validating...")
 		minibatch = None
 		prior_timesteps = None
 		timestep_info = None
@@ -429,7 +438,8 @@ class MultiExpert:
 				prior_timesteps = np.append(prior_timesteps, prior_timestep, axis=0)
 				timestep_info = np.append(timestep_info, int_vector_to_onehot_matrix(
 					np.arange(start, start+minibatch_size) % self.rhythm_encoding_size, self.rhythm_encoding_size)[None,:], axis=0)
-		return self.validate_internal(minibatch, prior_timesteps, timestep_info)
+		if self.transparent: return self.validate_internal(minibatch, prior_timesteps, timestep_info), minibatch, prior_timesteps, timestep_info
+		else: return self.validate_internal(minibatch, prior_timesteps, timestep_info)
 
 	def generate(self, piece):
 		return self.generate_internal(piece)

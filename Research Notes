@@ -188,6 +188,7 @@ Current open things to improve:
 	implement visualizer
 	implement test
 	write a script to test different architectures, including just regression, each subcombination, the multiple voice spacing models
+	pickle weights for easy loading/saving
 
 
 I did some preliminary experiments(just tried stuff out) and found that spacing + contour is the magic, it reduces error so fast, neither the simple generative nor the rhythm model seem to help much
@@ -211,3 +212,13 @@ Challenges here:
 Tuesday 11/15/16
 
 I'm going to write a testing framework that comes up with a visualization of each "expert" and their relative weights, and also graphs loss vs. minibatch number
+Then script it to run for a bunch of different subsets of experts and minibatch sizes
+
+I've come to the conclusion that visualization of actual neural network architectures are hard to do, and handwriting graphviz models might just work better
+
+Thursday 11/17/16
+
+On my own time I figured out the website things, I just need to write some content now, I'll deal with that tonight and show Kuperman tomorrow
+
+Now I'm working on the visualization stuff
+It works! Wonderful. I have pretty pictures.
