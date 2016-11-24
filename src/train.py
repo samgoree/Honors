@@ -91,7 +91,7 @@ def timesteps_to_notes(one_hot_voice, min_num, timestep_length):
 
 
 def train(model_name, visualize=False):
-	dataset, min_num, max_num, timestep_length = load_dataset("/usr/users/quota/students/18/sgoree/Honors/Data/train.p", "/usr/users/quota/students/18/sgoree/Honors/Data/validate.p")
+	dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
 	
 	if model_name == 'SimpleGenerative':
 		model = SimpleGenerative(max_num - min_num, [100,200,100], len(dataset[0]), 3)
@@ -113,8 +113,8 @@ def train(model_name, visualize=False):
 		print("Unknown Model")
 		sys.exit(1)
 	
-	output_dir = '/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name +'/' + strftime("%a,%d,%H:%M", localtime())+ '/'
-	if not os.path.exists('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name): os.mkdir('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name)
+	output_dir = '../Data/Output/' + model_name +'/' + strftime("%a,%d,%H:%M", localtime())+ '/'
+	if not os.path.exists('../Data/Output/' + model_name): os.mkdir('../Data/Output/' + model_name)
 	os.mkdir(output_dir)
 
 	# make validation set
@@ -145,13 +145,14 @@ def train(model_name, visualize=False):
 		if minibatch_count % 10 == 0:
 			print("Minibatch ", minibatch_count)
 			pieces = np.arange(len(validation_set))
+			validation_miminbatch_size = min([len(piece) for piece in validation_set])
 			# validate
 			if visualize:
-				loss, minibatch, prior_timesteps, timestep_info = model.validate(pieces, validation_set, minibatch_size)
+				loss, minibatch, prior_timesteps, timestep_info = model.validate(pieces, validation_set, validation_minibatch_size)
 				if not os.path.exists(output_dir + 'visualize/'): os.mkdir(output_dir + 'visualize/')
 				visualize_multiexpert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) +'/')
 			else:
-				loss = model.validate(pieces, validation_set, minibatch_size)
+				loss = model.validate(pieces, validation_set, validation_minibatch_size)
 			print("Loss: ", loss)
 			if loss < best_loss + epsilon: best_loss = loss
 			else:
@@ -167,4 +168,4 @@ def train(model_name, visualize=False):
 		minibatch_count += 1
 
 if __name__=='__main__':
-	train('MultiExpert', visualize=True)
+	train('SimpleGenerative', visualize=True)

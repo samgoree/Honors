@@ -94,7 +94,7 @@ class VoiceSpacingExpert(GenerativeLSTM):
 	def validate(self, pieces, validation_set, minibatch_size):
 		minibatch = None
 		for i in pieces:
-			start = np.random.randint(0, len(validation_set[i][0])-(minibatch_size+1))
+			start = 0
 			if minibatch is None:
 				minibatch = validation_set[i][None,:,start:start+minibatch_size]
 			else:
@@ -149,7 +149,7 @@ class VoiceContourExpert(GenerativeLSTM):
 	def validate(self, pieces, validation_set, minibatch_size):
 		minibatch = None
 		for i in pieces:
-			start = np.random.randint(0, len(validation_set[i][0])-(minibatch_size+1))
+			start = 0
 			if minibatch is None:
 				minibatch = validation_set[i][None,:,start:start+minibatch_size]
 			else:
@@ -217,7 +217,7 @@ class RhythmExpert(GenerativeLSTM):
 		prior_timesteps = None
 		timestep_info = None
 		for i in pieces:
-			start = np.random.randint(0, len(validation_set[i][0])-(minibatch_size+1))
+			start = 0
 			prior_timestep = validation_set[i][None,:,None,start-1] if start > 0 else np.zeros_like(validation_set[i][None,:,None,start])
 			if minibatch is None:
 				minibatch = validation_set[i][None,:,start:start+minibatch_size]
@@ -427,7 +427,7 @@ class MultiExpert:
 		prior_timesteps = None
 		timestep_info = None
 		for i in pieces:
-			start = np.random.randint(0, len(validation_set[i][0])-(minibatch_size+1))
+			start=0
 			prior_timestep = validation_set[i][None,:,None,start-1] if start > 0 else np.zeros_like(validation_set[i][None,:,None,start])
 			if minibatch is None:
 				minibatch = validation_set[i][None,:,start:start+minibatch_size]
