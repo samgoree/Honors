@@ -3,7 +3,7 @@
 
 import sys
 import os
-sys.path.append('/usr/users/quota/students/18/sgoree/Honors/src/')
+sys.path.append('~/Honors/src/')
 
 from Utilities.note import Note
 from Utilities.midi_parser_random import output_midi

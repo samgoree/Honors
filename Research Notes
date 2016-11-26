@@ -222,3 +222,22 @@ On my own time I figured out the website things, I just need to write some conte
 
 Now I'm working on the visualization stuff
 It works! Wonderful. I have pretty pictures.
+
+Thursday 11/24/16
+
+I'm on a plane home for thanksgiving working on my laptop. When I try to run things over SSH, I get a weird "Illegal action, core dumped" error. I'm not sure if this is a result of trying to run things over SSH (it shouldn't be, right?) or a bug in my code (I haven't tested much yet since finishing PoE).
+
+In order to make things happen on my computer, I changed a bunch of file paths to be relative, not dependent on OCCS directory structure (I should have done this from the start, but whatever)
+
+I also changed the way validation works - instead of randomly choosing four bars from somewhere in each validation piece, I choose a fixed-length prefix of each piece equal to the length of the shortest piece (numpy/theano really dislikes sparse arrays with the way I'm minibatching)
+
+Saturday 11/26
+
+Coming back to campus, what if instead of writing special visualization code for each expert, I just instantiate product of experts with one expert? That seems way better in hindsight.
+How I'm getting visualization:
+
+import train
+dataset, min_num, max_num, timestep_length = train.load_dataset("../Data/train.p", "../Data/validate.p")
+from Models.product_of_experts import MultiExpert
+model = MultiExpert(['SimpleGenerative'], 4, 3, min_num, max_num, timestep_length, transparent=True)
+train.train(model, 'JustSimpleGenerative', dataset, min_num, max_num, timestep_length, visualize=True)
