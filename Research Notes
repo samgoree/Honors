@@ -241,3 +241,10 @@ dataset, min_num, max_num, timestep_length = train.load_dataset("../Data/train.p
 from Models.product_of_experts import MultiExpert
 model = MultiExpert(['SimpleGenerative'], 4, 3, min_num, max_num, timestep_length, transparent=True)
 train.train(model, 'JustSimpleGenerative', dataset, min_num, max_num, timestep_length, visualize=True)
+
+and such
+
+In order to generate full pieces, I want to change training to train on 2 voice and 3 voice subsets as well as the full 4 voice chorales. To do that, I propose randomly choosing for each sample from the training set, how many voices to take from it, then validate on the validation set with 2, 3 and 4 voices.
+
+I also need a method for saving and loading weights, and a separate program that loads weights for a trained neural net, generates a voice (say, only using the contour expert, since it doesn't require any other data), then iteratively builds up the piece from there. This, I think, is the most interesting generative example because it doesn't depend on any of Bach's music directly.
+This program should also have options to generate a voice given one or more of bach's voices for a piece
