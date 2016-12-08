@@ -178,6 +178,7 @@ def instantiate_model(model_name, min_num, max_num, timestep_length, visualize):
 	else:
 		print("Unknown Model")
 		sys.exit(1)
+	return model
 
 if __name__=='__main__':
 	dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
