@@ -3,7 +3,7 @@
 
 import sys
 import os
-sys.path.append('/usr/users/quota/students/18/sgoree/Honors/src/')
+sys.path.append('~/Honors/src/')
 
 from Utilities.note import Note
 from Utilities.midi_parser_random import output_midi
@@ -174,7 +174,7 @@ class SimpleGenerative(GenerativeLSTM):
 		minibatch = None
 		prior_timesteps = None
 		for i in pieces:
-			start = np.random.randint(0, len(validation_set[i][0])-(minibatch_size+1))
+			start = 0
 			prior_timestep = validation_set[i][None,:,None,start-1]
 			if minibatch is None:
 				minibatch = validation_set[i][None,:,start:start+minibatch_size]

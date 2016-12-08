@@ -19,7 +19,7 @@ def visualize_probs(probs, title='', path=''):
 	else: plt.savefig(open(path, 'wb'))
 	plt.close()
 
-# we have to supply the three parameters determined randomly from the 
+# we have to supply the three parameters determined randomly from the validation pass
 def visualize_multiexpert(multi_expert, minibatch, prior_timesteps, timestep_info, directory='/'):
 	print('Visualizing...')
 	if not os.path.exists(directory): os.mkdir(directory)

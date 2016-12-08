@@ -89,32 +89,16 @@ def timesteps_to_notes(one_hot_voice, min_num, timestep_length):
 			i+=1
 	return notes
 
-
-def train(model_name, visualize=False):
-	dataset, min_num, max_num, timestep_length = load_dataset("/usr/users/quota/students/18/sgoree/Honors/Data/train.p", "/usr/users/quota/students/18/sgoree/Honors/Data/validate.p")
+# main training loop
+# model is a subclass of GenerativeLSTM or a MultiExpert
+# model name is the string to use when figuring out the output directory
+# dataset is a four dimensional python array - first dimension is piece, second is voice, third is time, fourth is pitch
+# min_num, max_num and timestep_length are constants describing the dataset, load_dataset returns them
+# visualize tells us whether or not to call the visualization function, for now this is only supported with MultiExpert
+def train(model, model_name, dataset, min_num, max_num, timestep_length, visualize=False):
 	
-	if model_name == 'SimpleGenerative':
-		model = SimpleGenerative(max_num - min_num, [100,200,100], len(dataset[0]), 3)
-	elif model_name == 'VoiceSpacingExpert':
-		model = VoiceSpacingExpert(max_num-min_num, [100,200,100], 0, 3)
-	elif model_name == 'Identity':
-		model = Identity(max_num - min_num, [100,100], 3)
-	elif model_name == 'VoiceContourExpert':
-		model = VoiceContourExpert(max_num-min_num, [100,200,100], 3)
-	elif model_name == 'RhythmExpert':
-		model = RhythmExpert(240*4//timestep_length, max_num-min_num, [100,200,100], 3)
-	elif model_name == 'MultiExpert':
-		model = MultiExpert(['SimpleGenerative', 'VoiceSpacingExpert', 'VoiceContourExpert', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length, transparent=visualize)
-	elif model_name == 'justSpacingContour':
-		model = MultiExpert(['VoiceSpacingExpert', 'VoiceContourExpert'], 4, 3,  min_num, max_num, timestep_length, transparent=visualize)
-	elif model_name == 'justSimpleRhythm':
-		model = MultiExpert(['SimpleGenerative', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length, transparent=visualize)
-	else:
-		print("Unknown Model")
-		sys.exit(1)
-	
-	output_dir = '/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name +'/' + strftime("%a,%d,%H:%M", localtime())+ '/'
-	if not os.path.exists('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name): os.mkdir('/usr/users/quota/students/18/sgoree/Honors/Data/Output/' + model_name)
+	output_dir = '../Data/Output/' + model_name +'/' + strftime("%a,%d,%H:%M", localtime())+ '/'
+	if not os.path.exists('../Data/Output/' + model_name): os.mkdir('../Data/Output/' + model_name)
 	os.mkdir(output_dir)
 
 	# make validation set
@@ -145,13 +129,18 @@ def train(model_name, visualize=False):
 		if minibatch_count % 10 == 0:
 			print("Minibatch ", minibatch_count)
 			pieces = np.arange(len(validation_set))
+			validation_minibatch_size = min([len(piece[0]) for piece in validation_set])
+			print(validation_minibatch_size)
 			# validate
 			if visualize:
-				loss, minibatch, prior_timesteps, timestep_info = model.validate(pieces, validation_set, minibatch_size)
+				loss, minibatch, prior_timesteps, timestep_info = model.validate(pieces, validation_set, validation_minibatch_size)
 				if not os.path.exists(output_dir + 'visualize/'): os.mkdir(output_dir + 'visualize/')
-				visualize_multiexpert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) +'/')
+				if type(model) is MultiExpert:
+					visualize_multiexpert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) +'/')
+				else:
+					visualize_expert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) + '/')
 			else:
-				loss = model.validate(pieces, validation_set, minibatch_size)
+				loss = model.validate(pieces, validation_set, validation_minibatch_size)
 			print("Loss: ", loss)
 			if loss < best_loss + epsilon: best_loss = loss
 			else:
@@ -162,9 +151,35 @@ def train(model_name, visualize=False):
 			print("Minibatch", str(minibatch_count), " sampling...")
 			sample_piece = training_set[np.random.randint(len(training_set))]
 			new_voice = model.generate(sample_piece)
-			print(new_voice)
 			output_midi([timesteps_to_notes(new_voice, min_num, timestep_length)], output_dir + str(minibatch_count) + '.mid')
 		minibatch_count += 1
 
+# shortcut for instantiating some common model structures
+# model name indicates which model, see source for exactly what it does
+# min_num, max_num, timestep_length are constants relevant to the dataset, load_dataset returns them
+# visualize tells the model whether to compile functions for getting probabilities in order to visualize output
+def instantiate_model(model_name, min_num, max_num, timestep_length, visualize):
+	if model_name == 'SimpleGenerative':
+		model = SimpleGenerative(max_num - min_num, [100,200,100], 4, 3)
+	elif model_name == 'VoiceSpacingExpert':
+		model = VoiceSpacingExpert(max_num-min_num, [100,200,100], 0, 3)
+	elif model_name == 'Identity':
+		model = Identity(max_num - min_num, [100,100], 3)
+	elif model_name == 'VoiceContourExpert':
+		model = VoiceContourExpert(max_num-min_num, [100,200,100], 3)
+	elif model_name == 'RhythmExpert':
+		model = RhythmExpert(240*4//timestep_length, max_num-min_num, [100,200,100], 3)
+	elif model_name == 'MultiExpert':
+		model = MultiExpert(['SimpleGenerative', 'VoiceSpacingExpert', 'VoiceContourExpert', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length, transparent=visualize)
+	elif model_name == 'justSpacingContour':
+		model = MultiExpert(['VoiceSpacingExpert', 'VoiceContourExpert'], 4, 3,  min_num, max_num, timestep_length, transparent=visualize)
+	elif model_name == 'justSimpleRhythm':
+		model = MultiExpert(['SimpleGenerative', 'RhythmExpert'], 4, 3,  min_num, max_num, timestep_length, transparent=visualize)
+	else:
+		print("Unknown Model")
+		sys.exit(1)
+
 if __name__=='__main__':
-	train('MultiExpert', visualize=True)
+	dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
+	model = instantiate_model('MultiExpert', min_num, max_num, timestep_length, visualize=True)
+	train(model, 'MultiExpert', dataset, min_num, max_num, timestep_length, visualize=True)
