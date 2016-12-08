@@ -126,7 +126,7 @@ class SimpleGenerative(GenerativeLSTM):
 	# pieces: minibatch of instances, each instance is a list of voices, each voice is a list of timesteps, each timestep is a 1-hot encoding
 	# prior_timesteps: the timestep before the start of each piece in pieces, prior_timestep.shape[2] should be 1
 	# piece: a full piece to generate the voice_to_predict of
-	def __init__(self, encoding_size, network_shape, num_voices, voice_to_predict, pieces=T.itensor4, prior_timesteps=T.itensor4, piece=T.itensor3, rng=None):
+	def __init__(self, encoding_size, network_shape, num_voices, voice_to_predict, pieces=T.itensor4(), prior_timesteps=T.itensor4(), piece=T.itensor3(), rng=None):
 		print("Building Simple Generative Model")
 		# variables for training
 
