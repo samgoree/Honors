@@ -117,7 +117,7 @@ def train(model, model_name, dataset, min_num, max_num, timestep_length, visuali
 
 	print("Training...")
 	# main training loop
-	minibatch_count = 0
+	minibatch_count = 0 if visualize else 1
 	best_loss = np.inf
 	terminate = False
 	while not terminate:
@@ -126,7 +126,7 @@ def train(model, model_name, dataset, min_num, max_num, timestep_length, visuali
 		# train
 		print('Minibatch', minibatch_count, ": ", model.train(pieces, training_set, minibatch_size))
 		# every 20 minibatches, validate
-		if minibatch_count % 10 == 0:
+		if minibatch_count % 20 == 0:
 			print("Minibatch ", minibatch_count)
 			pieces = np.arange(len(validation_set))
 			validation_minibatch_size = min([len(piece[0]) for piece in validation_set])
@@ -147,7 +147,7 @@ def train(model, model_name, dataset, min_num, max_num, timestep_length, visuali
 				print("Loss increasing, finishing training...")
 				terminate = True
 		# every 100 minibatches, sample a piece
-		if minibatch_count % 50 == 0 or terminate:
+		if minibatch_count % 100 == 0 or terminate:
 			print("Minibatch", str(minibatch_count), " sampling...")
 			sample_piece = training_set[np.random.randint(len(training_set))]
 			new_voice = model.generate(sample_piece)
@@ -166,7 +166,7 @@ def instantiate_model(model_name, min_num, max_num, timestep_length, visualize):
 	elif model_name == 'Identity':
 		model = Identity(max_num - min_num, [100,100], 3)
 	elif model_name == 'VoiceContourExpert':
-		model = VoiceContourExpert(max_num-min_num, [100,200,100], 3)
+		model = VoiceContourExpert(min_num, max_num, [100,200,100], 3)
 	elif model_name == 'RhythmExpert':
 		model = RhythmExpert(240*4//timestep_length, max_num-min_num, [100,200,100], 3)
 	elif model_name == 'MultiExpert':
@@ -178,6 +178,7 @@ def instantiate_model(model_name, min_num, max_num, timestep_length, visualize):
 	else:
 		print("Unknown Model")
 		sys.exit(1)
+	return model
 
 if __name__=='__main__':
 	dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")

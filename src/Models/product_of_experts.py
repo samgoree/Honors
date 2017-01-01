@@ -42,6 +42,14 @@ def roll_tensor(tensor, matrix):
 	r,u=theano.map(step, sequences=[tensor_as_matrix,matrix_as_vector])
 	return T.stack(r).reshape(tensor.shape)
 
+# cumulative sum where values above or below the max or min are bounded
+def bounded_cumsum(vector, min_val, max_val):
+	def step(val, total):
+		new_total = val + total
+		return T.maximum(T.minimum(new_total, max_val), min_val)
+	results, updates = theano.scan(step, sequences=vector, outputs_info=[T.cast(T.as_tensor_variable(0), 'int64')])
+	return results
+
 
 
 class VoiceSpacingExpert(GenerativeLSTM):
@@ -50,8 +58,12 @@ class VoiceSpacingExpert(GenerativeLSTM):
 	# known_voice_number is the number of the voice we know, same for unknown, these are a priori ints
 
 	# pieces and piece are for use with the product_of_experts model below, pieces is the training minibatch, piece is a piece to generate based on the known voice of
-	def __init__(self, encoding_size, network_shape, known_voice_number, unknown_voice_number, pieces=T.itensor4(), piece=T.itensor3(), rng=None):
+	def __init__(self, encoding_size, network_shape, known_voice_number, unknown_voice_number, pieces=None, piece=None, rng=None):
 		print("Building a Voice Spacing Expert")
+
+		#handle missing parameters
+		if pieces is None: pieces = T.itensor4()
+		if piece is None: piece = T.itensor3()
 
 		 #pieces has four dimensions: pieces, voices, time, pitch
 
@@ -108,27 +120,34 @@ class VoiceContourExpert(GenerativeLSTM):
 	# voice_number is the voice we are predicting
 	# voices, gen_length and first_note are theano variables for the product model below
 	# voices is the training minibatch, gen_length is the length of piece to generate and first note is its first note
-	def __init__(self, encoding_size, network_shape, voice_number, voices=T.itensor3(), gen_length=T.iscalar(), first_note=T.iscalar(), rng=None):
+	def __init__(self, min_num, max_num, network_shape, voice_number, voices=None, gen_length=None, first_note=None, rng=None):
 		print("Building a Voice Contour Expert")
+		# handle missing parameters
+		if voices is None: voices = T.itensor3()
+		if gen_length is None: gen_length = T.iscalar()
+		if first_note is None: first_note = T.iscalar()
+
 		self.voice_number = voice_number
+		encoding_size = max_num-min_num
 		
 		# voices' first dimension is piece, second is time, third is pitch
-		prev_notes = voices[:,1:]
+		prev_notes = voices[:,:-1]
 
 		# take each note, subtract the value of the previous note
-		contour = onehot_to_int(voices[:,:-1]) - onehot_to_int(prev_notes)
-		contour = T.concatenate([T.zeros_like(contour[:,0]).dimshuffle(0, 'x'), contour], axis=1)
+		contour = onehot_to_int(voices[:,1:]) - onehot_to_int(prev_notes)
+		#contour = T.concatenate([T.zeros_like(contour[:,0]).dimshuffle(0, 'x'), contour], axis=1) # I think this was wrong
 		onehot_contour = int_matrix_to_onehot_tensor3(contour + encoding_size, encoding_size * 2)
 
 		self.generated_probs, generated_contour, rng_updates = super(VoiceContourExpert, self).__init__(None, encoding_size * 2, network_shape, onehot_contour, None, None, gen_length, rng=rng)
-
 		# figure out the cost function
 		mask = onehot_contour[:, 1:]
 		cost = -T.sum(T.log((self.generated_probs[:,:-1] * mask).nonzero_values()))
 
 		updates, gsums, xsums, lr, max_norm  = theano_lstm.create_optimization_updates(cost, self.model.params, method='adadelta')
 
-		generated_voice = T.extra_ops.cumsum(onehot_to_int(generated_contour) - encoding_size) + first_note
+		first_note_and_contour = T.concatenate([first_note.dimshuffle('x'), onehot_to_int(generated_contour) - encoding_size])
+		#first_note = T.iscalar()
+		generated_voice = bounded_cumsum(first_note_and_contour, min_num, max_num)
 
 		self.train_internal = theano.function([voices], cost, updates=updates, allow_input_downcast=True)
 		self.validate_internal = theano.function([voices], cost, allow_input_downcast=True)
@@ -173,8 +192,13 @@ class RhythmExpert(GenerativeLSTM):
 	# pieces is the pitch info that we are trying to predict for each piece in the minibatch
 	# rhythm info is for generation, matrix of one-hot encodings of rhythm per timestep
 	def __init__(self, rhythm_encoding_size, pitch_encoding_size, network_shape, voice_number, 
-		timestep_info=T.itensor3(), prior_timestep_pitch_info = T.itensor4(), pieces=T.itensor4(), rhythm_info=T.imatrix(), rng=None):
+		timestep_info=None, prior_timestep_pitch_info=None, pieces=None, rhythm_info=None, rng=None):
 		print("Building a Rhythm Expert")
+		# handle missing params
+		if timestep_info is None: timestep_info = T.itensor3()
+		if prior_timestep_pitch_info is None: prior_timestep_pitch_info = T.itensor4()
+		if pieces is None: pieces = T.itensor4()
+		if rhythm_info is None: rhythm_info = T.imatrix()
 		self.voice_number = voice_number
 		self.pitch_encoding_size = pitch_encoding_size
 		self.rhythm_encoding_size = rhythm_encoding_size
@@ -250,8 +274,13 @@ class MultiExpert:
 	# timestep_info is the rhythm information about pieces
 	# piece is for generation, a full piece, first dimension is voice, second is time, third is pitch
 	def __init__(self, expert_types, num_voices, voice_to_predict,  min_num, max_num, timestep_length,
-					pieces=T.itensor4(), prior_timesteps=T.itensor4(), timestep_info=T.itensor3(), piece=T.itensor3(), rng=None, transparent=False):
+					pieces=None, prior_timesteps=None, timestep_info=None, piece=None, rng=None, transparent=False):
 		print("Building a multi-expert")
+		# handle missing parameters
+		if pieces is None: pieces = T.itensor4()
+		if prior_timesteps is None: prior_timesteps = T.itensor4()
+		if timestep_info is None: timestep_info = T.itensor3()
+		if piece is None: piece = T.itensor3()
 		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
 		self.transparent = transparent
 
@@ -283,9 +312,14 @@ class MultiExpert:
 				model = Identity(self.pitch_encoding_size, [100,100], voice_to_predict, pieces, piece, rng=rng)
 				expert_probs.append(model.generated_probs)
 			elif e == 'VoiceContourExpert':
-				model = VoiceContourExpert(self.pitch_encoding_size, [100,200,100], voice_to_predict, voices, gen_length, first_note, rng=rng)
+				model = VoiceContourExpert(min_num, max_num, [100,200,100], voice_to_predict, voices, gen_length, first_note, rng=rng)
 				# we need to roll each subtensor corresponding to a timestep by the value of the previous note in the training data for that instance
-				expert_probs.append(roll_tensor(model.generated_probs, onehot_to_int(voices))[:,:,self.pitch_encoding_size//2:(self.pitch_encoding_size*3)//2])
+				predicted_timesteps = roll_tensor(model.generated_probs, onehot_to_int(voices))[:,:,self.pitch_encoding_size//2:(self.pitch_encoding_size*3)//2]
+				# we necessarily cannot make predictions about the first timestep of the training data since it has no contour on its own
+				# this just gives equal probability of each note
+				first_timestep = T.ones_like(predicted_timesteps[:,0]) / predicted_timesteps.shape[2]
+				probs = T.concatenate([first_timestep.dimshuffle(0,'x',1), predicted_timesteps], axis=1)
+				expert_probs.append(probs)
 
 			elif e == 'RhythmExpert':
 				model = RhythmExpert(self.rhythm_encoding_size, self.pitch_encoding_size, [100,200,100], voice_to_predict, timestep_info, prior_timesteps, pieces, rhythm_info, rng=rng)
@@ -368,8 +402,12 @@ class MultiExpert:
 					# changes the generated probs (which here are voice spacing) into absolute pitch by rolling the subtensors corresponding to each timestep in each instance by the value of the reference voice
 					probs.append(T.roll(model_states[-1], onehot_to_int(known_voice)))
 				elif e == 'VoiceContourExpert':
+					# if we are on the first two timesteps, feed in prev_contour of 0
+					prev_contour = T.switch(T.gt(T.max(prev_note), 0),
+						T.set_subtensor(T.zeros([prev_note.shape[0]*2])[onehot_to_int(prev_note) - onehot_to_int(prev_prev_note) + self.pitch_encoding_size], 1),
+						T.set_subtensor(T.zeros([prev_note.shape[0]*2])[self.pitch_encoding_size], 1))
+
 					# this one fires on the difference between the previous two notes
-					prev_contour = T.set_subtensor(T.zeros([prev_note.shape[0]*2])[onehot_to_int(prev_note) - onehot_to_int(prev_prev_note)], 1)
 					model_states = model.model.forward(prev_contour, prev_hiddens[hidden_partitions[i]:hidden_partitions[i+1]])
 					new_states += model_states[:-1]
 					probs.append(T.roll(model_states[-1], onehot_to_int(prev_note) - self.pitch_encoding_size)[self.pitch_encoding_size//2:(self.pitch_encoding_size*3)//2])
@@ -383,8 +421,8 @@ class MultiExpert:
 					exit(1)
 			# multiply them together
 			product = T.ones_like(probs[0])
-			for p in probs:
-				product *= p
+			for i,p in enumerate(probs):
+				product *= (p ** self.product_weight[i])
 			total = T.sum(product)
 			final_product = product / total
 
