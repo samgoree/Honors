@@ -126,8 +126,13 @@ class SimpleGenerative(GenerativeLSTM):
 	# pieces: minibatch of instances, each instance is a list of voices, each voice is a list of timesteps, each timestep is a 1-hot encoding
 	# prior_timesteps: the timestep before the start of each piece in pieces, prior_timestep.shape[2] should be 1
 	# piece: a full piece to generate the voice_to_predict of
-	def __init__(self, encoding_size, network_shape, num_voices, voice_to_predict, pieces=T.itensor4(), prior_timesteps=T.itensor4(), piece=T.itensor3(), rng=None):
+	# if any of these theano variable parameters is None, a new variable will be instantiated
+	def __init__(self, encoding_size, network_shape, num_voices, voice_to_predict, pieces=None, prior_timesteps=None, piece=None, rng=None):
 		print("Building Simple Generative Model")
+		# handle unsupplied theano variables for training data
+		if pieces is None: pieces = T.itensor4()
+		if prior_timesteps is None: prior_timesteps=T.itensor4()
+		if piece is None: piece = T.itensor3()
 		# variables for training
 
 		full_pieces = T.sum(pieces, axis=1) # one-hot encoding of pitches for each timestep for each piece

@@ -248,3 +248,12 @@ In order to generate full pieces, I want to change training to train on 2 voice 
 
 I also need a method for saving and loading weights, and a separate program that loads weights for a trained neural net, generates a voice (say, only using the contour expert, since it doesn't require any other data), then iteratively builds up the piece from there. This, I think, is the most interesting generative example because it doesn't depend on any of Bach's music directly.
 This program should also have options to generate a voice given one or more of bach's voices for a piece
+
+Monday 1/2/17
+
+Happy New Year! Hopefully 2017 will be better than 2016 (though I'm not hopeful). I've been busy (but not taking notes because I suck) the past few days. Two important things: 
+- I found a nasty off-by-one error in the way that I fixed the contour model that confirms that it has learned an identity - so it predicts notes with almost perfect certainty because it was being fed the current timestep as input. After fixing that, the contour outputs look significantly more like what I expected (a gaussian distribution over contours close to zero), but the product model still gets nearly perfect prediction accuracy.
+- Someone published a paper doing exactly my project! https://www.csl.sony.fr/downloads/papers/2016/hadjeres-16a.pdf
+They do a few things differently, and I'll probably write a blog post about it, basically they use a simple generative model trained forwards and backwards and a non-recurrent network predicting the a note given concurrent notes. Instead of taking the product of those experts, they train another neural network to predict the note given the otuputs of those networks, then use gibbs sampling to generate, rather than doing a single forward pass. They also train on all 12 transpositions of each piece, to avoid doing relative pitch stuff. I don't know which (if any) of those ideas I am interested in using, but this paper really changes the direction my final results should go.
+
+Anyway, I'm going to keep writing retroactive blog posts and catch up with the research I've done so far.
