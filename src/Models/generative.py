@@ -114,6 +114,9 @@ class GenerativeLSTM:
 				for layer in self.model.layers if hasattr(layer, 'initial_hidden_state')])
 
 		return generated_probs, gen_results[0], updates3
+	# used for the product model generation scan internal function
+	def steprec(self, concurrent_notes, prev_concurrent_notes, known_voice, prev_known_voice, current_beat, prev_note, prev_prev_note, *prev_hiddens):
+		raise NotImplementedError("Please use a subclass for your specific model!")
 
 	def train(self):
 		raise NotImplementedError("Please use a subclass for your specific model!")
@@ -121,6 +124,7 @@ class GenerativeLSTM:
 		raise NotImplementedError("Please use a subclass for your specific model!")
 	def generate(self):
 		raise NotImplementedError("Please use a subclass for your specific model!")
+
 
 class SimpleGenerative(GenerativeLSTM):
 	# pieces: minibatch of instances, each instance is a list of voices, each voice is a list of timesteps, each timestep is a 1-hot encoding
@@ -151,6 +155,10 @@ class SimpleGenerative(GenerativeLSTM):
 
 		self.generated_probs, generated_piece, rng_updates = super(SimpleGenerative, self).__init__(encoding_size, None, network_shape, prev_notes, curr_notes,gen_input, rng=rng)
 
+		# for product model
+		self.params = self.model.params
+		self.layers = self.model.layers
+
 		mask = pieces[:,voice_to_predict]
 		cost = -T.sum(T.log((self.generated_probs * mask).nonzero_values()))
 
@@ -158,6 +166,13 @@ class SimpleGenerative(GenerativeLSTM):
 		self.train_internal = theano.function([pieces, prior_timesteps], cost, updates=updates, allow_input_downcast=True)
 		self.validate_internal = theano.function([pieces,prior_timesteps], cost, allow_input_downcast=True)
 		self.generate_internal = theano.function([piece], generated_piece, updates=rng_updates, allow_input_downcast=True)
+
+
+	def steprec(self, concurrent_notes, prev_concurrent_notes, known_voice, prev_known_voice, current_beat, prev_note, prev_prev_note, *prev_hiddens):
+		model_states=model.model.forward(T.concatenate([prev_note, concurrent_notes]), prev_hiddens])
+		new_states = model_states[:-1]
+		final_probs = model_states[-1]
+		return new_states, final_probs
 
 	# pieces is an array of ints corresponding to indicies of the pieces selected from training_set
 	def train(self, pieces, training_set, minibatch_size):

@@ -9,7 +9,8 @@ from Utilities.midi_parser_random import output_midi
 from Utilities.visualizer import visualize_multiexpert
 from Models.generative import *
 from Models.identity import Identity
-from Models.product_of_experts import VoiceSpacingExpert, VoiceContourExpert, RhythmExpert, MultiExpert
+from Models.product_of_experts import MultiExpert
+from Models.expert_models import VoiceSpacingExpert, VoiceContourExpert, RhythmExpert
 
 import pickle
 import fractions

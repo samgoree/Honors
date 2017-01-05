@@ -257,3 +257,24 @@ Happy New Year! Hopefully 2017 will be better than 2016 (though I'm not hopeful)
 They do a few things differently, and I'll probably write a blog post about it, basically they use a simple generative model trained forwards and backwards and a non-recurrent network predicting the a note given concurrent notes. Instead of taking the product of those experts, they train another neural network to predict the note given the otuputs of those networks, then use gibbs sampling to generate, rather than doing a single forward pass. They also train on all 12 transpositions of each piece, to avoid doing relative pitch stuff. I don't know which (if any) of those ideas I am interested in using, but this paper really changes the direction my final results should go.
 
 Anyway, I'm going to keep writing retroactive blog posts and catch up with the research I've done so far.
+
+Thursday 1/5/17
+
+Winter Term is here! My plan is to refactor a bunch, then implement training the network using a random prior, then work on including rhythm in the encoding, then build a more robust generation process that can generate entire pieces or start from a single voice of bach and generate from there. Hopefully I can do all of that in a month.
+
+I want to refactor product_of_experts to be recursive so that I can specify nested expert model structures, but generation proves challenging again. I'm going to have to abstract a bunch of things
+
+each model class needs an attribute layers and params of the same length and a function steprec
+
+layers should be a flat list of all of the layers of submodels, including non-recurrent layers
+params should be a flat list of all the theano shared variables for the model
+steprec should take a bunch of things (see generative.py for the method header) and return the output for a single timestep in terms of internal states and final probabilities (all symbolically, though)
+
+
++---------+-------+--------+---------+---------+--------+
+| Expert  | Multi | Simple | Spacing | Contour | Rhythm |
++---------+-------+--------+---------+---------+--------+
+| Params  |   ✓   |   ✓    |         |         |        |
+| Layers  |   ✓   |   ✓    |         |         |        |
+| steprec |   ✓   |   ✓    |         |         |        |
++---------+-------+--------+---------+---------+--------+
