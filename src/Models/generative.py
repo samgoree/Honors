@@ -35,7 +35,7 @@ class GenerativeLSTM:
 	# output_encoding_size is the same is input_encoding_size if left None
 	# gen_length is by default the length of gen_input, but if that is None, it should be a specified theano scalar specifying how many timesteps to generate.
 	# returns a tensor of the same shape of prev_notes that is the outputted probabilties, a tensor of the same shape as all_but_one voice and the random variable updates for generation
-	def __init__(self, input_encoding_size, output_encoding_size, network_shape, prev_notes, curr_notes, gen_input, gen_length=None, rng=None):
+	def __init__(self, input_encoding_size, output_encoding_size, network_shape, prev_notes, curr_notes, gen_input, gen_length=None, add_random_prior=False, rng=None):
 		print("Building a generative model")
 		
 		# handle encoding size modularity
@@ -168,8 +168,8 @@ class SimpleGenerative(GenerativeLSTM):
 		self.generate_internal = theano.function([piece], generated_piece, updates=rng_updates, allow_input_downcast=True)
 
 
-	def steprec(self, concurrent_notes, prev_concurrent_notes, known_voice, prev_known_voice, current_beat, prev_note, prev_prev_note, *prev_hiddens):
-		model_states=model.model.forward(T.concatenate([prev_note, concurrent_notes]), prev_hiddens])
+	def steprec(self, concurrent_notes, prev_concurrent_notes, known_voice, prev_known_voice, current_beat, prev_note, prev_prev_note, prev_hiddens):
+		model_states=self.model.forward(T.concatenate([prev_note, concurrent_notes]), prev_hiddens)
 		new_states = model_states[:-1]
 		final_probs = model_states[-1]
 		return new_states, final_probs

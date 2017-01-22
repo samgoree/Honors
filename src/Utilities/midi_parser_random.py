@@ -216,7 +216,7 @@ def output_midi(piece, path):
             events.append((note.start_time, note.num, 'note_on'))
             events.append((note.stop_time, note.num, 'note_off'))
     # sort them in time order
-    sorted(events, key=lambda n: n[0])
+    events = sorted(events, key=lambda n: n[0])
     mid = mido.MidiFile()
     track = mido.MidiTrack()
     mid.tracks.append(track)
