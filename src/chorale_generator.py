@@ -221,8 +221,10 @@ def harmonize_melody_and_bass(dataset, min_num, max_num, timestep_length, rhythm
 	if not os.path.exists('../Data/Output/harmonize_melody_and_bass'): os.mkdir('../Data/Output/harmonize_melody_and_bass')
 	os.mkdir(output_dir)
 	# train models
-	alto_model = instantiate_and_train_alto_model(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir, visualize=visualize)if alto_weights is None else load_weights(alto_weights)
-	tenor_model = instantiate_and_train_tenor_model(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir, visualize=visualize)if tenor_weights is None else load_weights(tenor_weights)
+	alto_model = instantiate_and_train_alto_model(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir, 
+		visualize=visualize)if alto_weights is None else load_weights(alto_weights)
+	tenor_model = instantiate_and_train_tenor_model(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir, 
+		visualize=visualize)if tenor_weights is None else load_weights(tenor_weights)
 
 	for i in range(num_to_generate):
 		# choose a random bach piece to steal the first note of
@@ -240,10 +242,11 @@ def harmonize_melody_and_bass(dataset, min_num, max_num, timestep_length, rhythm
 		generated_piece[1] = tenor_voice
 
 		print(generated_piece)
-		output_midi([timesteps_to_notes(voice, min_num, timestep_length) for voice in generated_piece], path=output_dir + 'output' + str(i) + '.mid')
+		output_midi([timesteps_to_notes(voice, min_num, timestep_length * 480) for voice in generated_piece], path=output_dir + 'output' + str(i) + '.mid')
 
 # load dataset
-dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
-	rhythm_encoding_size = int(4//timestep_length)
-harmonize_melody_and_bass(dataset, min_num,  max_num, timestep_length, rhythm_encoding_size, 10)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
+paths = music21.corpus.getBachChorales()
+dataset, articulation, min_num, max_num, timestep_length = load_dataset_music21(paths)
+rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
+harmonize_melody_and_bass(dataset, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=False)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
 																			#tenor_weights='../Data/Output/Tenor_model/Tue,17,09:30/280.p', bass_weights='../Data/Output/Bass_Model/Tue,17,09:37/60.p')

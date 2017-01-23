@@ -331,3 +331,15 @@ Done with the generation schemes, they all sound awful, but I think figuring out
 
 This is awful and I'm not going to try to debug the segfault cmake is giving me. I'll just avoid music21's visualization system.
 
+Saturday 1/21/17
+
+I spent most of this week reading Xenakis and applying for jobs. Tonight I finished up the music21 dataset to timestep converter
+It was super smooth, since my code was modular enough. Now I'm running a test run of the model. Training is a lot slower, since I also increased the minibatch size from two bar excerpts to four bar and from 10 pieces to 20, but that has nothing to do with the new dataset (which should contain the same pieces). I'm going to leave it training overnight and see what happens.
+
+Sunday 1/22/17
+
+Now that I've got the music21 dataset loader written, I can test with a palestrina dataset as well if I want to. I also want to implement the articulate/sustain/rest model
+
+Articulation data is in vectors of length 3 [articuate, sustain, rest] for each timestep for each voice. The dimensions of articulation_info returned by the function that parses the music21 datasets is [piece, voice, timestep, articulation]
+
+The palestrina dataset (which I'm kind of looking at in parallel with articulation stuff) is of varied numbers of voices (since it was the renaissance), mostly 4-7. I'd need to find some way to differentiate between voices for training (i.e. a voice model shouldn't train on tenor in one piece and alto 2 in another)

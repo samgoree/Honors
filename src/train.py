@@ -29,6 +29,7 @@ import numpy as np
 np.set_printoptions(threshold=np.inf)
 
 epsilon = 10e-9
+PPQ = 480
 
 
 # takes the path to a pickle file
@@ -65,6 +66,7 @@ def load_dataset(*filepath):
 	return timestep_data, min_num, max_num, gcd
 
 # uses the music21 dataset system instead of the mido powered midi parsing system to load a dataset
+# articulation data should be interpreted much as pitch timesteps, except instead of having max_num-min_num pitches, it has 3 possible one-hot values, articulate, sustain and rest, in that order
 def load_dataset_music21(file_list):
 	print("Loading music21 dataset")
 	raw_dataset = []
@@ -89,28 +91,40 @@ def load_dataset_music21(file_list):
 					if note.pitch.midi+1 > max_num: max_num = note.pitch.midi + 1
 					if gcd is None: gcd = note.duration.quarterLength
 					else: gcd = fractions.gcd(gcd, note.duration.quarterLength)
+				elif isinstance(note, music21.note.Rest):
+					stop_time = note.duration.quarterLength + note.offset
+					if stop_time > piece_length: piece_length = stop_time
+					if gcd is None: gcd = note.duration.quarterLength
+					else: gcd = fractions.gcd(gcd, note.duration.quarterLength)
+
+
 		piece_lengths.append(piece_length)
 	# convert each note to a list of timesteps
 	timestep_data = [np.zeros([len(raw_dataset[i].parts), int(piece_lengths[i]//gcd), max_num-min_num], dtype='int64')  for i in range(len(raw_dataset))]
+	articulation_data = [np.zeros([len(raw_dataset[i].parts), int(piece_lengths[i]//gcd), 3]) for i in range(len(raw_dataset))]
 	for i,score in enumerate(raw_dataset):
 		for j,voice in enumerate(score.parts):
 			for note in voice.flat:
 				if isinstance(note, music21.note.Note):
 					timestep_data[i][j,int(note.offset//gcd):int((note.offset + note.duration.quarterLength)//gcd), note.pitch.midi - min_num] = 1
-	return timestep_data, min_num,max_num,gcd
+					articulation_data[i][j,int(note.offset//gcd),0] = 1
+					articulation_data[i][j,int(note.offset//gcd)+1:int((note.offset + note.duration.quarterLength)//gcd), 1]
+				elif isinstance(note, music21.note.Rest):
+					articulation_data[i][j,int(note.offset//gcd)+1:int((note.offset + note.duration.quarterLength)//gcd), 2]
+	return timestep_data, articulation_data, min_num,max_num,gcd
 
 # takes a list of one-hot encoded timesteps
 # the midi number of the 0-position encoding
-# the length of a timestep
+# the length of a timestep in midi timesteps
 # outputs a list of notes
-def timesteps_to_notes(one_hot_voice, min_num, timestep_length):
+def timesteps_to_notes(one_hot_voice, min_num, timestep_length_midi):
 	voice = onehot_matrix_to_int_vector(one_hot_voice) if one_hot_voice.ndim==2 else one_hot_voice
 	i = 0
 	curr_note = None
 	curr_time = 0
 	notes = []
 	while i < len(voice):
-		curr_time += timestep_length
+		curr_time += timestep_length_midi
 		if curr_note is not None and voice[i] == curr_note.num:
 			i+=1
 		elif curr_note is not None:
@@ -191,7 +205,7 @@ def train(model, model_name, dataset, min_num, max_num, timestep_length, output_
 			sample_piece = training_set[np.random.randint(len(training_set))]
 			new_voice = model.generate(sample_piece)
 			store_weights(model, output_dir + str(minibatch_count) +'.p')
-			output_midi([timesteps_to_notes(new_voice, min_num, timestep_length)], output_dir + str(minibatch_count) + '.mid')
+			output_midi([timesteps_to_notes(new_voice, min_num, timestep_length * PPQ)], output_dir + str(minibatch_count) + '.mid')
 		minibatch_count += 1
 
 # store weights from model to a file at path
