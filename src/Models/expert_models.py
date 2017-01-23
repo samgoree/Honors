@@ -67,6 +67,7 @@ class VoiceSpacingExpert(GenerativeLSTM):
 		#handle missing parameters
 		if pieces is None: pieces = T.itensor4()
 		if piece is None: piece = T.itensor3()
+		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
 
 		 #pieces has four dimensions: pieces, voices, time, pitch
 
@@ -143,6 +144,7 @@ class VoiceContourExpert(GenerativeLSTM):
 		if voices is None: voices = T.itensor3()
 		if gen_length is None: gen_length = T.iscalar()
 		if first_note is None: first_note = T.iscalar()
+		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
 
 		self.voice_number = voice_number
 		self.encoding_size = max_num-min_num
@@ -231,6 +233,7 @@ class RhythmExpert(GenerativeLSTM):
 		if prior_timestep_pitch_info is None: prior_timestep_pitch_info = T.itensor4()
 		if pieces is None: pieces = T.itensor4()
 		if rhythm_info is None: rhythm_info = T.imatrix()
+		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
 		self.voice_number = voice_number
 		self.pitch_encoding_size = pitch_encoding_size
 		self.rhythm_encoding_size = rhythm_encoding_size

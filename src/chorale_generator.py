@@ -2,6 +2,7 @@
 # scripts the process for generating a chorale from scratch (composition) and from a melody (reharmonization)
 
 from train import *
+from Models.articulation_model import ArticulationModel
 
 ###### four functions to instantiate the models for the first chorale generation scheme ######
 
@@ -32,6 +33,9 @@ def instantiate_and_train_bass_model(dataset, min_num, max_num, timestep_length,
 	bass_model = MultiExpert(models, 4, 0,  min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=visualize)
 	train(bass_model, 'Bass_model', dataset, min_num, max_num, timestep_length, output_dir=output_dir, visualize=visualize)
+
+	# instantiate articulation model
+
 	return bass_model
 
 def instantiate_and_train_soprano_model(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=None, visualize=False):
@@ -248,5 +252,5 @@ def harmonize_melody_and_bass(dataset, min_num, max_num, timestep_length, rhythm
 paths = music21.corpus.getBachChorales()
 dataset, articulation, min_num, max_num, timestep_length = load_dataset_music21(paths)
 rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
-harmonize_melody_and_bass(dataset, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=False)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
+generate_voice_by_voice(dataset, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=False)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
 																			#tenor_weights='../Data/Output/Tenor_model/Tue,17,09:30/280.p', bass_weights='../Data/Output/Bass_Model/Tue,17,09:37/60.p')
