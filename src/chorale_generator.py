@@ -252,5 +252,5 @@ def harmonize_melody_and_bass(dataset, min_num, max_num, timestep_length, rhythm
 paths = music21.corpus.getBachChorales()
 dataset, articulation, min_num, max_num, timestep_length = load_dataset_music21(paths)
 rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
-generate_voice_by_voice(dataset, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=False)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
+generate_voice_by_voice(dataset, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=True)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
 																			#tenor_weights='../Data/Output/Tenor_model/Tue,17,09:30/280.p', bass_weights='../Data/Output/Bass_Model/Tue,17,09:37/60.p')

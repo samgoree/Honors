@@ -24,7 +24,7 @@ class MultiExpert:
 	# prior_timesteps is the timestep before the start of each minibatch instance
 	# timestep_info is the rhythm information about pieces
 	# piece is for generation, a full piece, first dimension is voice, second is time, third is pitch
-	def __init__(self, sub_experts, num_voices, voice_to_predict,  min_num, max_num, timestep_length, rhythm_encoding_size,
+	def __init__(self, sub_experts, num_voices, voice_to_predict,  min_num, max_num, timestep_length, rhythm_encoding_size, articulation_model=True,
 					pieces=None, prior_timesteps=None, timestep_info=None, piece=None, rng=None, transparent=False):
 		print("Building a multi-expert")
 		# handle missing parameters
@@ -33,6 +33,7 @@ class MultiExpert:
 		if timestep_info is None: timestep_info = T.itensor3()
 		if piece is None: piece = T.itensor3()
 		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
+
 		self.transparent = transparent
 
 		self.rhythm_encoding_size = rhythm_encoding_size
@@ -45,6 +46,11 @@ class MultiExpert:
 		rhythm_info = theano.map(lambda a, t: T.set_subtensor(T.zeros(t)[a % t], 1), sequences=T.arange(gen_length), non_sequences=self.rhythm_encoding_size)[0]
 
 		# instantiate all of our experts
+
+		if articulation_model:
+			self.articulation_model = ArticulationModel(3, [10,20,10], gen_length=gen_length, rng=rng)
+		else:
+			self.articulation_model = None
 		
 		expert_probs = []
 		self.hidden_partitions = [0]
@@ -169,8 +175,7 @@ class MultiExpert:
 		final_product = product / total
 		return new_states, final_product
 
-
-	def train(self, pieces, training_set, minibatch_size):
+	def train(self, pieces, training_set, minibatch_size, articulation_data=None):
 		minibatch = None
 		prior_timesteps = None
 		timestep_info = None
@@ -186,6 +191,8 @@ class MultiExpert:
 				prior_timesteps = np.append(prior_timesteps, prior_timestep, axis=0)
 				timestep_info = np.append(timestep_info, int_vector_to_onehot_matrix(
 					np.arange(start, start+minibatch_size) % self.rhythm_encoding_size, self.rhythm_encoding_size)[None,:], axis=0)
+		if articulation_data is not None:
+			self.articulation_model.train(pieces, articulation_data, minibatch_size)
 		return self.train_internal(minibatch, prior_timesteps, timestep_info)
 
 	# pieces is an array of ints corresponding to indicies of the pieces selected from training_set

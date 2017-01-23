@@ -343,3 +343,9 @@ Now that I've got the music21 dataset loader written, I can test with a palestri
 Articulation data is in vectors of length 3 [articuate, sustain, rest] for each timestep for each voice. The dimensions of articulation_info returned by the function that parses the music21 datasets is [piece, voice, timestep, articulation]
 
 The palestrina dataset (which I'm kind of looking at in parallel with articulation stuff) is of varied numbers of voices (since it was the renaissance), mostly 4-7. I'd need to find some way to differentiate between voices for training (i.e. a voice model shouldn't train on tenor in one piece and alto 2 in another)
+
+It turns out integrating the articulation model into the MultiExpert architecture might be a bit tricky. I'm going to have to make the top-level Multi expert in any architecture have its own articulation model that it uses for generation only (trained separately from the product model that has its own whole list of parameters)
+
+Monday 1/23/17
+
+Well, Ben just resigned from the department, so the future of this project is kind of in jeopardy. We'll see if I can get reassigned and finish my project. For now, I'm just going to keep trying to get the articulation model working.
