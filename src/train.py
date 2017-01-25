@@ -29,7 +29,7 @@ import numpy as np
 np.set_printoptions(threshold=np.inf)
 
 epsilon = 10e-9
-PPQ = 480
+PPQ = 480 # pulses per quarter, a midi thing to determine how long a timestep is
 
 
 # takes the path to a pickle file
@@ -107,38 +107,50 @@ def load_dataset_music21(file_list):
 			for note in voice.flat:
 				if isinstance(note, music21.note.Note):
 					timestep_data[i][j,int(note.offset//gcd):int((note.offset + note.duration.quarterLength)//gcd), note.pitch.midi - min_num] = 1
+					# set onehot of the first timestep of the note to 0
 					articulation_data[i][j,int(note.offset//gcd),0] = 1
-					articulation_data[i][j,int(note.offset//gcd)+1:int((note.offset + note.duration.quarterLength)//gcd), 1]
+					# set onehot of the rest within the note to 1
+					articulation_data[i][j,int(note.offset//gcd)+1:int((note.offset + note.duration.quarterLength)//gcd), 1] = 1
 				elif isinstance(note, music21.note.Rest):
-					articulation_data[i][j,int(note.offset//gcd)+1:int((note.offset + note.duration.quarterLength)//gcd), 2]
+					# set onehot of all the timesteps to 2
+					articulation_data[i][j,int(note.offset//gcd):int((note.offset + note.duration.quarterLength)//gcd), 2] = 1
 	return timestep_data, articulation_data, min_num,max_num,gcd
 
 # takes a list of one-hot encoded timesteps
 # the midi number of the 0-position encoding
 # the length of a timestep in midi timesteps
 # outputs a list of notes
-def timesteps_to_notes(one_hot_voice, min_num, timestep_length_midi):
+def timesteps_to_notes(one_hot_voice, one_hot_articulation, min_num, timestep_length_midi):
 	voice = onehot_matrix_to_int_vector(one_hot_voice) if one_hot_voice.ndim==2 else one_hot_voice
+	articulation = onehot_matrix_to_int_vector(one_hot_articulation) if one_hot_articulation.ndim==2 else one_hot_articulation
+	if len(voice) != len(articulation):
+		print("Error, paired voice (len",len(voice), ") and articulation (len ", len(articulation), ") are not the same length.")
+		sys.exit(1)
 	i = 0
 	curr_note = None
 	curr_time = 0
 	notes = []
+	stats = [0,0,0]
 	while i < len(voice):
-		curr_time += timestep_length_midi
-		if curr_note is not None and voice[i] == curr_note.num:
-			i+=1
-		elif curr_note is not None:
-			curr_note.stop_time = curr_time
-			notes.append(curr_note)
-			if voice[i] == -1:
+		stats[articulation[i]] += 1
+		# articulate
+		if articulation[i] == 0:
+			if curr_note is not None:
+				curr_note.stop_time = curr_time
+				notes.append(curr_note)
+			curr_note = Note(voice[i] + min_num, curr_time)
+		# sustain
+		elif articulation[i] == 1:
+			pass
+		# rest
+		elif articulation[i] == 2:
+			if curr_note is not None:
+				curr_note.stop_time = curr_time
+				notes.append(curr_note)
 				curr_note = None
-			else:
-				curr_note = Note(voice[i], curr_time)
-			i+=1
-		else:
-			if voice[i] != -1:
-				curr_note = Note(voice[i], curr_time)
-			i+=1
+		curr_time += timestep_length_midi
+		i+=1
+	print(stats)
 	return notes
 
 # main training loop
@@ -148,7 +160,7 @@ def timesteps_to_notes(one_hot_voice, min_num, timestep_length_midi):
 # min_num, max_num and timestep_length are constants describing the dataset, load_dataset returns them
 # if output dir is not specified, it will create a new one
 # visualize tells us whether or not to call the visualization function, for now this is only supported with MultiExpert
-def train(model, model_name, dataset, min_num, max_num, timestep_length, output_dir=None, visualize=False):
+def train(model, model_name, dataset, articulation_data, min_num, max_num, timestep_length, output_dir=None, visualize=False):
 	
 	if output_dir is None:
 		output_dir = '../Data/Output/' + model_name +'/' + strftime("%a,%d,%H:%M", localtime())+ '/'
@@ -158,11 +170,17 @@ def train(model, model_name, dataset, min_num, max_num, timestep_length, output_
 	# make validation set
 	validation_pieces = np.random.choice(len(dataset), size=len(dataset)//4, replace=False)
 	validation_set = []
+	validation_set_articulation = []
 	training_set = []
+	training_set_articulation = []
 	for i in range(len(dataset)):
 		if i in validation_pieces:
 			validation_set.append(dataset[i])
-		else: training_set.append(dataset[i])
+			validation_set_articulation.append(articulation_data[i])
+		else: 
+			training_set.append(dataset[i])
+			training_set_articulation.append(articulation_data[i])
+
 
 	# magic number - a minibatch element is four bars
 	minibatch_size = int(16//timestep_length)
@@ -173,20 +191,26 @@ def train(model, model_name, dataset, min_num, max_num, timestep_length, output_
 	# main training loop
 	minibatch_count = 0 if visualize else 1
 	best_loss = np.inf
-	terminate = False
-	while not terminate:
+	best_articulation_loss = np.inf
+	stop_training_pitch = False
+	stop_training_articulation = False
+	while not (stop_training_pitch and stop_training_articulation):
 		# choose our minibatch
 		pieces = np.random.choice(len(training_set), size=minibatch_number, replace=False)
 		# train
-		print('Minibatch', minibatch_count, ": ", model.train(pieces, training_set, minibatch_size))
+		if not stop_training_pitch:
+			print('Minibatch', minibatch_count, " pitch model: ", model.train(pieces, training_set, minibatch_size))
+		if not stop_training_articulation:
+			print('Minibatch', minibatch_count, " articulation model: ", model.articulation_model.train(pieces, training_set_articulation, minibatch_size))
 		# every 20 minibatches, validate
 		if minibatch_count % 20 == 0:
 			print("Minibatch ", minibatch_count)
 			pieces = np.arange(len(validation_set))
 			validation_minibatch_size = min([len(piece[0]) for piece in validation_set])
 			# validate
-			if visualize:
+			if visualize and not stop_training_pitch:
 				loss, minibatch, prior_timesteps, timestep_info = model.validate(pieces, validation_set, validation_minibatch_size)
+				articulation_loss = model.articulation_model.validate(pieces, validation_set_articulation, validation_minibatch_size)
 				if not os.path.exists(output_dir + 'visualize/'): os.mkdir(output_dir + 'visualize/')
 				if type(model) is MultiExpert:
 					visualize_multiexpert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) +'/')
@@ -194,18 +218,24 @@ def train(model, model_name, dataset, min_num, max_num, timestep_length, output_
 					visualize_expert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) + '/')
 			else:
 				loss = model.validate(pieces, validation_set, validation_minibatch_size)
+				articulation_loss = model.articulation_model.validate(pieces, validation_set_articulation, validation_minibatch_size)
 			print("Loss: ", loss)
+			print("Articulation Loss: ", articulation_loss)
 			if loss < best_loss + epsilon: best_loss = loss
 			else:
 				print("Loss increasing, finishing training...")
-				terminate = True
+				stop_training_pitch = True
+			if articulation_loss < best_articulation_loss + epsilon: best_articulation_loss = articulation_loss
+			else:
+				print("Articulation loss increasing, finishing training...")
+				stop_training_articulation = True
 		# every 100 minibatches, sample a piece
-		if minibatch_count % 100 == 0 or terminate:
+		if minibatch_count % 100 == 0 or (stop_training_pitch and stop_training_articulation):
 			print("Minibatch", str(minibatch_count), " sampling...")
 			sample_piece = training_set[np.random.randint(len(training_set))]
-			new_voice = model.generate(sample_piece)
+			new_voice, new_articulation = model.generate(sample_piece)
 			store_weights(model, output_dir + str(minibatch_count) +'.p')
-			output_midi([timesteps_to_notes(new_voice, min_num, timestep_length * PPQ)], output_dir + str(minibatch_count) + '.mid')
+			output_midi([timesteps_to_notes(new_voice, new_articulation, min_num, timestep_length * PPQ)], output_dir + str(minibatch_count) + '.mid')
 		minibatch_count += 1
 
 # store weights from model to a file at path
@@ -249,7 +279,7 @@ def load_weights(path):
 if __name__=='__main__':
 	#dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
 	paths = music21.corpus.getBachChorales()
-	dataset, min_num, max_num, timestep_length = load_dataset_music21(paths)
+	dataset, articulation_data, min_num, max_num, timestep_length = load_dataset_music21(paths)
 	rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
 	timestep_info = T.itensor3()
 	prior_timesteps=T.itensor4()
@@ -276,4 +306,4 @@ if __name__=='__main__':
 	model = MultiExpert([spacing_multiexpert, contour_expert, rhythm_expert, simple_generative], 4, 3,  min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
 	#model = instantiate_model('MultiExpert', min_num, max_num, timestep_length, visualize=True)
-	train(model, 'MultiExpert', dataset, min_num, max_num, timestep_length, visualize=True)
+	train(model, 'MultiExpert', dataset, articulation_data, min_num, max_num, timestep_length, visualize=True)

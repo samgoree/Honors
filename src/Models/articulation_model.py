@@ -5,16 +5,17 @@ from Models.generative import *
 
 class ArticulationModel(GenerativeLSTM):
 	
-	def __init__(self, encoding_size, network_shape, articulation_data=None, gen_length=None, rng=None):
+	def __init__(self, encoding_size, network_shape, voice_number, articulation_data=None, gen_length=None, rng=None):
 		if articulation_data is None:
-			articulation_data = T.itensor4()
+			articulation_data = T.itensor3()
 		if gen_length is None:
 			gen_length = T.iscalar()
 			if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
-		self.generated_probs, generated_articulation, rng_updates = super(VoiceSpacingExpert, self).__init__(None, encoding_size, network_shape, articulation_data, None, None, gen_length, rng=rng)
+		self.generated_probs, generated_articulation, rng_updates = super(ArticulationModel, self).__init__(None, encoding_size, network_shape, articulation_data, None, None, gen_length, rng=rng)
 
 		self.params = self.model.params
 		self.layers = self.model.layers
+		self.voice_number = voice_number
 
 		mask = articulation_data
 		cost = -T.sum(T.log((self.generated_probs * mask).nonzero_values()))
@@ -25,6 +26,10 @@ class ArticulationModel(GenerativeLSTM):
 		self.validate_internal = theano.function([articulation_data], cost, allow_input_downcast=True)
 		self.generate = theano.function([gen_length], generated_articulation, updates=rng_updates, allow_input_downcast=True)
 
+	def steprec(self, prev_articulation, prev_hiddens):
+		model_states= self.model.forward(prev_articulation, prev_hiddens)
+		return model_states[:-1], model_states[-1]
+
 	def train(self, pieces, training_set, minibatch_size):
 		minibatch = None
 		prior_timesteps = None
@@ -34,7 +39,7 @@ class ArticulationModel(GenerativeLSTM):
 				minibatch = training_set[i][None,:,start:start+minibatch_size]
 			else:
 				minibatch = np.append(minibatch, training_set[i][None,:,start:start+minibatch_size], axis=0)
-		return self.train_internal(minibatch)
+		return self.train_internal(minibatch[:,self.voice_number])
 
 	# pieces is an array of ints corresponding to indicies of the pieces selected from training_set
 	def validate(self, pieces, validation_set, minibatch_size):
@@ -45,4 +50,4 @@ class ArticulationModel(GenerativeLSTM):
 				minibatch = validation_set[i][None,:,start:start+minibatch_size]
 			else:
 				minibatch = np.append(minibatch, validation_set[i][None,:,start:start+minibatch_size], axis=0)
-		return self.validate_internal(minibatch)
+		return self.validate_internal(minibatch[:, self.voice_number])

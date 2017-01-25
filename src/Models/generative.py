@@ -216,11 +216,14 @@ def int_to_onehot(n, len):
 
 def onehot_matrix_to_int_vector(onehot):
 	output = []
+	cont = False
 	for val in onehot:
 		for i in range(len(val)):
 			if val[i] == 1: 
 				output.append(i)
+				cont = True
 				break
-		output.append(-1)
+		if not cont: output.append(-1)
+		cont = False
 	return np.array(output)
 

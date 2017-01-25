@@ -348,4 +348,22 @@ It turns out integrating the articulation model into the MultiExpert architectur
 
 Monday 1/23/17
 
-Well, Ben just resigned from the department, so the future of this project is kind of in jeopardy. We'll see if I can get reassigned and finish my project. For now, I'm just going to keep trying to get the articulation model working.
+Well, Ben just resigned from the department, so the future of this project is kind of in jeopardy. We'll see if I can get reassigned and finish my project. For now, I'm just going to keep trying to get the articulation model working. I also didn't get the google job, so that's that.
+
+As with any modification to my call to scan, things are messy, so we'll see if I can get it to work. 
+
+I think it's working now, I still need to encorporate the articulation in the way I'm creating midi files, though.
+
+Wednesday 1/25/17
+
+The timesteps_to_notes modifications I had to make were pretty easy, but they reveal another problem that I think is with onehot to int
+
+Ooh, embarrasing error in onehot to int! I was creating a timestep with pitch -1 every time, often after a real timestep, since I tried to use break to break out of two for loops at once. This might change everything with regard to my output! We'll see.
+
+I'm realizing that two things I am doing while training are questionable: first, I train the two models simultaneously, which means that one might overfit while the other is still getting there. Second, I train the pitch model on timesteps where its output might not be used. I really need to use the probability of the articulation model articulating as a multiplier on the chances of the pitch model's output being used when calculating error. Yeah, actually, how do I calculate error when the training data is a rest?? Since I'm using the training data as a mask, it just won't add anything to the log liklihood. That should change.
+
+This output sounds waaaaay better. Funny how bug fixes work. Anyway, the midi files I'm outputting still have a lot of note on/off signals that should be long notes. I'm curious if that's another bug or if I'm just outputting articulate every timestep. If I am, that's bad.
+
+I'm always outputting sustain. Huh. After investigating the training data, I was actually never setting any of the articulation data to sustain, so that makes sense. I fixed the bug (I was never actually setting anything when loading the dataset, so there was no data for most timesteps in the articulation data), so now it should train better.
+
+Well, now the articulation model is only outputting sustain. That's pretty bad and probably means I need to rethink the way I build the articulation model. I'm going to try to revert the switch to articulation models and fix the issues with timesteps to midi again to see whether I get similar gains.
