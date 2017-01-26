@@ -135,20 +135,31 @@ class MultiExpert:
 
 
 		def step(concurrent_notes, prev_concurrent_notes, known_voices, prev_known_voices, current_beat, prev_note, prev_prev_note, *prev_hiddens):
-			model_states, output_probs = self.steprec(concurrent_notes, prev_concurrent_notes, known_voices, prev_known_voices, current_beat, prev_note, 
+			if self.transparent: model_states, output_probs, internal_probs = self.steprec(concurrent_notes, prev_concurrent_notes, known_voices, prev_known_voices, current_beat, 
+				prev_note, prev_prev_note, prev_hiddens)
+			else: model_states, output_probs = self.steprec(concurrent_notes, prev_concurrent_notes, known_voices, prev_known_voices, current_beat, prev_note, 
 				prev_prev_note, prev_hiddens)
 
 			# sample from dist
 			chosen_pitch = rng.choice(size=[1], a=self.pitch_encoding_size, p=output_probs)
 			current_timestep_onehot = T.cast(int_to_onehot(chosen_pitch, self.pitch_encoding_size), 'int64')
-			return [current_timestep_onehot] + model_states
-
-		# I am dimshuffling the known_voices so that we loop over the right axis (time), so the new dimensions are time, voice, pitch
-		results, gen_updates = theano.scan(step, n_steps=all_but_one_voice.shape[0], sequences = [dict(input=T.concatenate([T.zeros([1,all_but_one_voice.shape[1]]),all_but_one_voice], axis=0), taps=[0,-1]), 
-									dict(input=T.concatenate([T.zeros([known_voices.shape[0], 1 ,known_voices.shape[2]]),known_voices], axis=1).dimshuffle(1,0,2), taps=[0,-1]), dict(input=beat_info, taps=[0])],
-									outputs_info=[dict(initial=T.zeros([2, self.pitch_encoding_size], dtype='int64'), taps=[-1,-2])] + [dict(initial=layer.initial_hidden_state, taps=[-1])
-				for layer in self.layers if hasattr(layer, 'initial_hidden_state')])
-
+			if self.transparent:
+				return [current_timestep_onehot, internal_probs] + model_states
+			else:
+				return [current_timestep_onehot] + model_states
+		if transparent:
+			# I am dimshuffling the known_voices so that we loop over the right axis (time), so the new dimensions are time, voice, pitch
+			results, gen_updates = theano.scan(step, n_steps=all_but_one_voice.shape[0], sequences = [dict(input=T.concatenate([T.zeros([1,all_but_one_voice.shape[1]]),all_but_one_voice], axis=0), taps=[0,-1]), 
+										dict(input=T.concatenate([T.zeros([known_voices.shape[0], 1 ,known_voices.shape[2]]),known_voices], axis=1).dimshuffle(1,0,2), taps=[0,-1]), dict(input=beat_info, taps=[0])],
+										outputs_info=[dict(initial=T.zeros([2, self.pitch_encoding_size], dtype='int64'), taps=[-1,-2]), None] + [dict(initial=layer.initial_hidden_state, taps=[-1])
+					for layer in self.layers if hasattr(layer, 'initial_hidden_state')])
+			self.
+		else:
+			# I am dimshuffling the known_voices so that we loop over the right axis (time), so the new dimensions are time, voice, pitch
+			results, gen_updates = theano.scan(step, n_steps=all_but_one_voice.shape[0], sequences = [dict(input=T.concatenate([T.zeros([1,all_but_one_voice.shape[1]]),all_but_one_voice], axis=0), taps=[0,-1]), 
+										dict(input=T.concatenate([T.zeros([known_voices.shape[0], 1 ,known_voices.shape[2]]),known_voices], axis=1).dimshuffle(1,0,2), taps=[0,-1]), dict(input=beat_info, taps=[0])],
+										outputs_info=[dict(initial=T.zeros([2, self.pitch_encoding_size], dtype='int64'), taps=[-1,-2])] + [dict(initial=layer.initial_hidden_state, taps=[-1])
+					for layer in self.layers if hasattr(layer, 'initial_hidden_state')])
 		self.generate_internal  = theano.function([piece], results[0], updates=gen_updates, allow_input_downcast=True, on_unused_input='ignore')
 
 
@@ -167,7 +178,8 @@ class MultiExpert:
 			product *= (p ** self.product_weight[i])
 		total = T.sum(product)
 		final_product = product / total
-		return new_states, final_product
+		if self.transparent: return new_states, final_product, probs
+		else: return new_states, final_product
 
 
 	def train(self, pieces, training_set, minibatch_size):
