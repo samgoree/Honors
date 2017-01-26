@@ -29,6 +29,7 @@ import numpy as np
 np.set_printoptions(threshold=np.inf)
 
 epsilon = 10e-9
+PPQ = 480 # pulses per quarter note -- a midi thing that specifies the length of a timestep
 
 
 # takes the path to a pickle file
@@ -109,22 +110,29 @@ def timesteps_to_notes(one_hot_voice, min_num, timestep_length):
 	curr_note = None
 	curr_time = 0
 	notes = []
+	stats = [0,0,0]
 	while i < len(voice):
-		curr_time += timestep_length
-		if curr_note is not None and voice[i] == curr_note.num:
-			i+=1
+		if curr_note is not None and voice[i] + min_num == curr_note.num:
+			stats[1]+=1
 		elif curr_note is not None:
+
 			curr_note.stop_time = curr_time
 			notes.append(curr_note)
 			if voice[i] == -1:
+				stats[2]+=1
 				curr_note = None
 			else:
-				curr_note = Note(voice[i], curr_time)
-			i+=1
+				stats[0]+=1
+				curr_note = Note(voice[i] + min_num, curr_time)
 		else:
 			if voice[i] != -1:
-				curr_note = Note(voice[i], curr_time)
-			i+=1
+				stats[0]+=1
+				curr_note = Note(voice[i] + min_num, curr_time)
+			else:
+				stats[2] += 1
+		i+=1
+		curr_time += timestep_length
+	print(stats)
 	return notes
 
 # main training loop
@@ -188,10 +196,10 @@ def train(model, model_name, dataset, min_num, max_num, timestep_length, output_
 		# every 100 minibatches, sample a piece
 		if minibatch_count % 100 == 0 or terminate:
 			print("Minibatch", str(minibatch_count), " sampling...")
-			sample_piece = training_set[np.random.randint(len(training_set))]
+			sample_piece = validation_set[np.random.randint(len(validation_set))]
 			new_voice = model.generate(sample_piece)
-			store_weights(model, output_dir + str(minibatch_count) +'.p')
-			output_midi([timesteps_to_notes(new_voice, min_num, timestep_length)], output_dir + str(minibatch_count) + '.mid')
+			store_weights(model, output_dir + model_name + str(minibatch_count) +'.p')
+			output_midi([timesteps_to_notes(new_voice, min_num, timestep_length * PPQ)], output_dir + model_name + str(minibatch_count) + '.mid')
 		minibatch_count += 1
 
 # store weights from model to a file at path
@@ -234,8 +242,7 @@ def load_weights(path):
 
 if __name__=='__main__':
 	#dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
-	paths = music21.corpus.getBachChorales()
-	dataset, min_num, max_num, timestep_length = load_dataset_music21(paths)
+	dataset, min_num, max_num, timestep_length = pickle.load(open('../Data/music21.dataset', 'rb'))
 	rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
 	timestep_info = T.itensor3()
 	prior_timesteps=T.itensor4()

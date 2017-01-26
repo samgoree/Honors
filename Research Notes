@@ -331,3 +331,51 @@ Done with the generation schemes, they all sound awful, but I think figuring out
 
 This is awful and I'm not going to try to debug the segfault cmake is giving me. I'll just avoid music21's visualization system.
 
+Saturday 1/21/17
+
+I spent most of this week reading Xenakis and applying for jobs. Tonight I finished up the music21 dataset to timestep converter
+It was super smooth, since my code was modular enough. Now I'm running a test run of the model. Training is a lot slower, since I also increased the minibatch size from two bar excerpts to four bar and from 10 pieces to 20, but that has nothing to do with the new dataset (which should contain the same pieces). I'm going to leave it training overnight and see what happens.
+
+Sunday 1/22/17
+
+Now that I've got the music21 dataset loader written, I can test with a palestrina dataset as well if I want to. I also want to implement the articulate/sustain/rest model
+
+Articulation data is in vectors of length 3 [articuate, sustain, rest] for each timestep for each voice. The dimensions of articulation_info returned by the function that parses the music21 datasets is [piece, voice, timestep, articulation]
+
+The palestrina dataset (which I'm kind of looking at in parallel with articulation stuff) is of varied numbers of voices (since it was the renaissance), mostly 4-7. I'd need to find some way to differentiate between voices for training (i.e. a voice model shouldn't train on tenor in one piece and alto 2 in another)
+
+It turns out integrating the articulation model into the MultiExpert architecture might be a bit tricky. I'm going to have to make the top-level Multi expert in any architecture have its own articulation model that it uses for generation only (trained separately from the product model that has its own whole list of parameters)
+
+Monday 1/23/17
+
+Well, Ben just resigned from the department, so the future of this project is kind of in jeopardy. We'll see if I can get reassigned and finish my project. For now, I'm just going to keep trying to get the articulation model working. I also didn't get the google job, so that's that.
+
+As with any modification to my call to scan, things are messy, so we'll see if I can get it to work. 
+
+I think it's working now, I still need to encorporate the articulation in the way I'm creating midi files, though.
+
+Wednesday 1/25/17
+
+The timesteps_to_notes modifications I had to make were pretty easy, but they reveal another problem that I think is with onehot to int
+
+Ooh, embarrasing error in onehot to int! I was creating a timestep with pitch -1 every time, often after a real timestep, since I tried to use break to break out of two for loops at once. This might change everything with regard to my output! We'll see.
+
+I'm realizing that two things I am doing while training are questionable: first, I train the two models simultaneously, which means that one might overfit while the other is still getting there. Second, I train the pitch model on timesteps where its output might not be used. I really need to use the probability of the articulation model articulating as a multiplier on the chances of the pitch model's output being used when calculating error. Yeah, actually, how do I calculate error when the training data is a rest?? Since I'm using the training data as a mask, it just won't add anything to the log liklihood. That should change.
+
+This output sounds waaaaay better. Funny how bug fixes work. Anyway, the midi files I'm outputting still have a lot of note on/off signals that should be long notes. I'm curious if that's another bug or if I'm just outputting articulate every timestep. If I am, that's bad.
+
+I'm always outputting articulate. Huh. After investigating the training data, I was actually never setting any of the articulation data to sustain, so that makes sense. I fixed the bug (I was never actually setting anything when loading the dataset, so there was no data for most timesteps in the articulation data), so now it should train better.
+
+Well, now the articulation model is only outputting sustain. That's pretty bad and probably means I need to rethink the way I build the articulation model. I'm going to try to revert the switch to articulation models and fix the issues with timesteps to midi again to see whether I get similar gains. Thank god (and Linus) for git. The articulation model might just be unnecessary.
+
+I think I've now done that, fixed timesteps to notes and all the related functions.
+
+I'm going to figure out a way to visualize generation and use abjad to make scores out of the output without going through midi.
+
+Thursday 1/26/17
+
+I left the chorale generation on overnight, and it turned out awful again. I am unsure what exactly models are learning so well that they are unable to reproduce when not given a sample to generate from. 
+
+Hold on, I'm getting the piece to generate from from the training set. That's fishy. I'm going to change it to the validation set and see if I get output that sounds as nice. The other idea I've got is to do generation in several voices simultaneously, which would take some rewriting of the generation scripts, but is probably doable. Well, how do I figure out spacing? What if I had a new model, where one model predicts each of the 6 different spacings and I have another for contour/rhythm for each voice? How would I take the product? I'd need to know the offset for that voice at that time. This is interesting math. I'd need the spacing models to interact in such a way that I combine the output of soprano/alto + alto/tenor with soprano/tenor. That said, this still feels like boostrapping. At what point do I get real pitch values? One voice needs to be set in stone. Or I need to do the Gibbs sampling thing. What if I regenerated voices instead of regenerating individual notes? That seems computationally simpler that doing effectively an entire generative run for each note multiple times.
+
+I'm going to try that since it's not too hard.

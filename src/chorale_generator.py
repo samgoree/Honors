@@ -3,6 +3,8 @@
 
 from train import *
 
+PPQ = 480 # pulses per quarter note -- a midi thing that specifies the length of a timestep
+
 ###### four functions to instantiate the models for the first chorale generation scheme ######
 
 # dataset etc. are the same as usual
@@ -151,8 +153,7 @@ def generate_voice_by_voice(dataset, min_num, max_num, timestep_length, rhythm_e
 		tenor_voice = tenor_model.generate(generated_piece)
 		generated_piece[1] = tenor_voice
 
-		print(generated_piece)
-		output_midi([timesteps_to_notes(voice, min_num, timestep_length) for voice in generated_piece], path=output_dir + 'output' + str(i) + '.mid')
+		output_midi([timesteps_to_notes(voice, min_num, timestep_length * PPQ) for voice in generated_piece], path=output_dir + 'output' + str(i) + '.mid')
 
 
 def harmonize_melody(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
@@ -182,8 +183,7 @@ def harmonize_melody(dataset, min_num, max_num, timestep_length, rhythm_encoding
 		tenor_voice = tenor_model.generate(generated_piece)
 		generated_piece[1] = tenor_voice
 
-		print(generated_piece)
-		output_midi([timesteps_to_notes(voice, min_num, timestep_length) for voice in generated_piece], path=output_dir + 'output' + str(i) + '.mid')
+		output_midi([timesteps_to_notes(voice, min_num, timestep_length * PPQ) for voice in generated_piece], path=output_dir + 'output' + str(i) + '.mid')
 
 def harmonize_bass(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
 	# make output directory
@@ -212,8 +212,7 @@ def harmonize_bass(dataset, min_num, max_num, timestep_length, rhythm_encoding_s
 		tenor_voice = tenor_model.generate(generated_piece)
 		generated_piece[1] = tenor_voice
 
-		print(generated_piece)
-		output_midi([timesteps_to_notes(voice, min_num, timestep_length) for voice in generated_piece], path=output_dir + 'output' + str(i) + '.mid')
+		output_midi([timesteps_to_notes(voice, min_num, timestep_length * PPQ) for voice in generated_piece], path=output_dir + 'output' + str(i) + '.mid')
 
 def harmonize_melody_and_bass(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
 	# make output directory
@@ -239,11 +238,16 @@ def harmonize_melody_and_bass(dataset, min_num, max_num, timestep_length, rhythm
 		tenor_voice = tenor_model.generate(generated_piece)
 		generated_piece[1] = tenor_voice
 
-		print(generated_piece)
-		output_midi([timesteps_to_notes(voice, min_num, timestep_length) for voice in generated_piece], path=output_dir + 'output' + str(i) + '.mid')
+		output_midi([timesteps_to_notes(voice, min_num, timestep_length * PPQ) for voice in generated_piece], path=output_dir + 'output' + str(i) + '.mid')
 
 # load dataset
-dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
+if __name__ == '__main__':
+	paths = music21.corpus.getBachChorales()
+	dataset, min_num, max_num, timestep_length = load_dataset_music21(paths)
 	rhythm_encoding_size = int(4//timestep_length)
-harmonize_melody_and_bass(dataset, min_num,  max_num, timestep_length, rhythm_encoding_size, 10)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
+	harmonize_melody_and_bass(dataset, min_num,  max_num, timestep_length, rhythm_encoding_size, 10)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
 																			#tenor_weights='../Data/Output/Tenor_model/Tue,17,09:30/280.p', bass_weights='../Data/Output/Bass_Model/Tue,17,09:37/60.p')
+	harmonize_bass(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, 10)
+	harmonize_melody(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, 10)
+	generate_voice_by_voice(dataset, min_num, max_num, timestep_length, rhythm_encoding_size, 10)
+	
