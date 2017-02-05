@@ -8,6 +8,15 @@ from Models.identity import Identity
 from Utilities.visualizer import visualize_multiexpert
 from sys import exit
 
+# slice each subtensor of tensor from the corresponding starts to the length
+def modular_slice(tensor, starts, length):
+	assert tensor.ndim - 1 == starts.ndim
+	tensor_as_matrix = T.reshape(tensor, [tensor.shape[0]*tensor.shape[1], tensor.shape[2]], ndim=2)
+	starts_as_vector = T.reshape(starts, starts.shape[0]*starts.shape[1], ndim=1)
+	def step(tensor_vector, start_value, length):
+		return tensor_vector[start_value:start_value+length]
+	r,u=theano.map(step, sequences=[tensor_as_matrix,starts_as_vector], non_sequences=length)
+	return T.reshape(T.stack(r), [tensor.shape[0], tensor.shape[1], length], ndim=3)
 
 
 # Combines the "opinions" of multiple of the above experts
@@ -41,14 +50,14 @@ class MultiExpert:
 		self.pitch_encoding_size = max_num - min_num
 
 		# some symbolic manipulation necessary for expert models
-		voices = pieces[:,3]
+		voices = pieces[:,voice_to_predict]
 		gen_length = piece.shape[1]
 		first_note = T.argmax(piece[voice_to_predict,0])
 		rhythm_info = theano.map(lambda a, t: T.set_subtensor(T.zeros(t)[a % t], 1), sequences=T.arange(gen_length), non_sequences=self.rhythm_encoding_size)[0]
 
 		# instantiate all of our experts
 
-		self.articulation_model = ArticulationModel(3, [10,20,10], voice_to_predict, gen_length=gen_length, rng=rng)
+		self.articulation_model = ArticulationModel(3, rhythm_encoding_size, [100,200,100], voice_to_predict, timestep_info=timestep_info, rhythm_info=rhythm_info, rng=rng)
 		
 		expert_probs = []
 		self.hidden_partitions = [0]
@@ -63,12 +72,14 @@ class MultiExpert:
 			elif type(model) is VoiceSpacingExpert:
 				spacing_probs = model.generated_probs
 				# changes the generated probs (which here are voice spacing) into absolute pitch by rolling the subtensors corresponding to each timestep in each instance by the value of the reference voice
-				expert_probs.append(roll_tensor(spacing_probs, onehot_to_int(pieces[:,0 if voice_to_predict != 0 else num_voices-1])))
+				min_num_index = self.pitch_encoding_size-onehot_to_int(pieces[:,model.known_voice_number])
+				expert_probs.append(modular_slice(roll_tensor(spacing_probs, onehot_to_int(pieces[:,model.known_voice_number]) - self.pitch_encoding_size), min_num_index, self.pitch_encoding_size))
 			elif type(model) is Identity:
 				expert_probs.append(model.generated_probs)
 			elif type(model) is VoiceContourExpert:
+				min_num_index = self.pitch_encoding_size - onehot_to_int(voices)
 				# we need to roll each subtensor corresponding to a timestep by the value of the previous note in the training data for that instance
-				predicted_timesteps = roll_tensor(model.generated_probs, onehot_to_int(voices))[:,:,self.pitch_encoding_size//2:(self.pitch_encoding_size*3)//2]
+				predicted_timesteps = modular_slice(roll_tensor(model.generated_probs, onehot_to_int(voices)), min_num_index, self.pitch_encoding_size)
 				# we necessarily cannot make predictions about the first timestep of the training data since it has no contour on its own
 				# this just gives equal probability of each note
 				first_timestep = T.ones_like(predicted_timesteps[:,0]) / predicted_timesteps.shape[2]
@@ -143,12 +154,12 @@ class MultiExpert:
 				prev_prev_note, prev_hiddens[:self.hidden_partitions[-1]])
 
 			# sample from dist
-			chosen_pitch = rng.choice(size=[1], a=self.pitch_encoding_size, p=output_probs)
+			chosen_pitch = rng.choice(size=[1], a=self.pitch_encoding_size, p=output_probs)[0]
 
 			#fire articulation model
-			articulation_states, articulation_probs = self.articulation_model.steprec(prev_articulation, prev_hiddens[self.hidden_partitions[-1]:])
+			articulation_states, articulation_probs = self.articulation_model.steprec(prev_articulation, current_beat, prev_hiddens[self.hidden_partitions[-1]:])
 			model_states += articulation_states
-			articulation = rng.choice(size=[1], a=3, p=articulation_probs)[0]
+			articulation = theano.printing.Print('articulation')(rng.choice(size=[1], a=3, p=theano.printing.Print('articulation probs')(articulation_probs))[0])
 			rest = T.zeros_like(prev_note)
 
 			# if the articulation is sustain

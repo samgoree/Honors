@@ -24,7 +24,7 @@ def instantiate_and_train_bass_model(dataset, articulation_data, min_num, max_nu
 
 
 	# instantiate expert models
-	if soprano: bass_spacing_expert = VoiceSpacingExpert(max_num-min_num, [100,200,100], 3, 0,pieces=pieces, piece=piece, rng=rng)
+	if soprano: bass_spacing_expert = VoiceSpacingExpert(min_num, max_num, [100,200,100], 3, 0,pieces=pieces, piece=piece, rng=rng)
 	bass_contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], 0,
 		voices=voices, gen_length=gen_length, first_note=first_note, rng=rng)
 	bass_rhythm_expert = RhythmExpert(rhythm_encoding_size, max_num-min_num, [100,200,100], 0, 
@@ -52,7 +52,7 @@ def instantiate_and_train_soprano_model(dataset, articulation_data, min_num, max
 
 
 	# instantiate chorale models
-	soprano_spacing_expert = VoiceSpacingExpert(max_num-min_num, [100,200,100], 0, 3,pieces=pieces, piece=piece, rng=rng)
+	soprano_spacing_expert = VoiceSpacingExpert(min_num, max_num, [100,200,100], 0, 3,pieces=pieces, piece=piece, rng=rng)
 	soprano_contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], 3,
 		voices=voices, gen_length=gen_length, first_note=first_note, rng=rng)
 	soprano_rhythm_expert = RhythmExpert(rhythm_encoding_size, max_num-min_num, [100,200,100], 3, 
@@ -78,8 +78,8 @@ def instantiate_and_train_alto_model(dataset, articulation_data, min_num, max_nu
 
 
 	# instantiate chorale models
-	alto_soprano_spacing_expert = VoiceSpacingExpert(max_num-min_num, [100,200,100], 3, 2, pieces=pieces, piece=piece, rng=rng)
-	alto_bass_spacing_expert = VoiceSpacingExpert(max_num-min_num, [100,200,100], 0, 2, pieces=pieces, piece=piece, rng=rng)
+	alto_soprano_spacing_expert = VoiceSpacingExpert(min_num, max_num, [100,200,100], 3, 2, pieces=pieces, piece=piece, rng=rng)
+	alto_bass_spacing_expert = VoiceSpacingExpert(min_num, max_num, [100,200,100], 0, 2, pieces=pieces, piece=piece, rng=rng)
 	spacing_multiexpert = MultiExpert([alto_soprano_spacing_expert, alto_bass_spacing_expert], 4, 2, min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
 	alto_contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], 2,
@@ -106,9 +106,9 @@ def instantiate_and_train_tenor_model(dataset, articulation_data, min_num, max_n
 
 
 	# instantiate chorale models
-	tenor_soprano_spacing_expert = VoiceSpacingExpert(max_num-min_num, [100,200,100], 3, 1, pieces=pieces, piece=piece, rng=rng)
-	tenor_alto_spacing_expert = VoiceSpacingExpert(max_num-min_num, [100,200,100], 2, 1, pieces=pieces, piece=piece, rng=rng)
-	tenor_bass_spacing_expert = VoiceSpacingExpert(max_num-min_num, [100,200,100], 0, 1, pieces=pieces, piece=piece, rng=rng)
+	tenor_soprano_spacing_expert = VoiceSpacingExpert(min_num, max_num, [100,200,100], 3, 1, pieces=pieces, piece=piece, rng=rng)
+	tenor_alto_spacing_expert = VoiceSpacingExpert(min_num, max_num, [100,200,100], 2, 1, pieces=pieces, piece=piece, rng=rng)
+	tenor_bass_spacing_expert = VoiceSpacingExpert(min_num, max_num, [100,200,100], 0, 1, pieces=pieces, piece=piece, rng=rng)
 	spacing_multiexpert = MultiExpert([tenor_soprano_spacing_expert, tenor_alto_spacing_expert, tenor_bass_spacing_expert], 3, 1, min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
 	tenor_contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], 1,
@@ -262,8 +262,7 @@ def harmonize_melody_and_bass(dataset, articulation_data, min_num, max_num, time
 		output_midi([timesteps_to_notes(voice, articulation, min_num, timestep_length * PPQ) for voice, articulation in zip(generated_piece, generated_articulation)], path=output_dir + 'output' + str(i) + '.mid')
 
 # load dataset
-paths = music21.corpus.getBachChorales()
-dataset, articulation, min_num, max_num, timestep_length = load_dataset_music21(paths)
+dataset, articulation, min_num, max_num, timestep_length = pickle.load(open('../Data/music21_articulation_dataset.p', 'rb'))
 rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
 generate_voice_by_voice(dataset, articulation, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=True)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
 																			#tenor_weights='../Data/Output/Tenor_model/Tue,17,09:30/280.p', bass_weights='../Data/Output/Bass_Model/Tue,17,09:37/60.p')

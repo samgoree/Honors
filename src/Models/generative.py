@@ -35,7 +35,7 @@ class GenerativeLSTM:
 	# output_encoding_size is the same is input_encoding_size if left None
 	# gen_length is by default the length of gen_input, but if that is None, it should be a specified theano scalar specifying how many timesteps to generate.
 	# returns a tensor of the same shape of prev_notes that is the outputted probabilties, a tensor of the same shape as all_but_one voice and the random variable updates for generation
-	def __init__(self, input_encoding_size, output_encoding_size, network_shape, prev_notes, curr_notes, gen_input, gen_length=None, add_random_prior=False, rng=None):
+	def __init__(self, input_encoding_size, output_encoding_size, network_shape, prev_notes, curr_notes, gen_input, gen_length=None, rng=None):
 		print("Building a generative model")
 		
 		# handle encoding size modularity
@@ -91,7 +91,7 @@ class GenerativeLSTM:
 			def gen_step(prev_notes, prev_output, *prev_hiddens):
 				new_states = self.model.forward(T.concatenate([prev_output, prev_notes]), prev_hiddens)
 				# complicated part: sample from the distribution in new_states[-1] and return
-				chosen_pitch = rng.choice(size=[1], a=output_encoding, p=new_states[-1])
+				chosen_pitch = rng.choice(size=[1], a=output_encoding, p=new_states[-1])[0]
 				current_timestep_onehot = T.cast(int_to_onehot(chosen_pitch, output_encoding), 'int64')
 				return [current_timestep_onehot] + new_states[:-1]
 
@@ -104,7 +104,7 @@ class GenerativeLSTM:
 			def gen_step(prev_note, *prev_hiddens):
 				new_states = self.model.forward(prev_note, prev_hiddens)
 				# complicated part: sample from the distribution in new_states[-1] and return
-				chosen_pitch = rng.choice(size=[1], a=output_encoding, p=new_states[-1])
+				chosen_pitch = rng.choice(size=[1], a=output_encoding, p=new_states[-1])[0]
 				current_timestep_onehot = T.cast(int_to_onehot(chosen_pitch, output_encoding), 'int64')
 				return [current_timestep_onehot] + new_states[:-1]
 
@@ -208,10 +208,9 @@ class SimpleGenerative(GenerativeLSTM):
 		return self.generate_internal(piece)
 
 # theano symbolic way to convert an int to a one-hot encoding
-def int_to_onehot(n, len):
-	a = T.zeros([len])
-	if n == -1: return a
-	a = T.set_subtensor(a[n], 1)
+def int_to_onehot(n, length):
+	a = T.zeros([length])
+	a = theano.ifelse.ifelse(T.eq(n, -1), a, T.set_subtensor(a[n], 1))
 	return a
 
 def onehot_matrix_to_int_vector(onehot):

@@ -189,7 +189,7 @@ def train(model, model_name, dataset, articulation_data, min_num, max_num, times
 
 	print("Training...")
 	# main training loop
-	minibatch_count = 0 if visualize else 1
+	minibatch_count = 0 #if visualize else 1
 	best_loss = np.inf
 	best_articulation_loss = np.inf
 	stop_training_pitch = False
@@ -216,8 +216,10 @@ def train(model, model_name, dataset, articulation_data, min_num, max_num, times
 					visualize_multiexpert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) +'/')
 				else:
 					visualize_expert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) + '/')
-			else:
+			elif not visualize and not stop_training_pitch:
 				loss = model.validate(pieces, validation_set, validation_minibatch_size)
+				articulation_loss = model.articulation_model.validate(pieces, validation_set_articulation, validation_minibatch_size)
+			else:
 				articulation_loss = model.articulation_model.validate(pieces, validation_set_articulation, validation_minibatch_size)
 			print("Loss: ", loss)
 			print("Articulation Loss: ", articulation_loss)
@@ -278,8 +280,7 @@ def load_weights(path):
 
 if __name__=='__main__':
 	#dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
-	paths = music21.corpus.getBachChorales()
-	dataset, articulation_data, min_num, max_num, timestep_length = load_dataset_music21(paths)
+	dataset, articulation_data, min_num, max_num, timestep_length = pickle.load(open('../Data/music21_articulation_dataset.p', 'rb'))
 	rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
 	timestep_info = T.itensor3()
 	prior_timesteps=T.itensor4()
@@ -294,16 +295,16 @@ if __name__=='__main__':
 
 	spacing_models = []
 	for i in range(3):
-		spacing_models.append(VoiceSpacingExpert(max_num-min_num, [100,200,100], i, 3,pieces=pieces, piece=piece, rng=rng))
+		spacing_models.append(VoiceSpacingExpert(min_num,max_num, [100,200,100], i, 3,pieces=pieces, piece=piece, rng=rng))
 	spacing_multiexpert = MultiExpert(spacing_models, 4, 3, min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
-	contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], 3,
-		voices=voices, gen_length=gen_length, first_note=first_note, rng=rng)
-	rhythm_expert = RhythmExpert(rhythm_encoding_size, max_num-min_num, [100,200,100], 3, 
-		timestep_info=timestep_info, prior_timestep_pitch_info=prior_timesteps, pieces=pieces, rhythm_info=rhythm_info, rng=rng)
-	simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,3,
-		pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
-	model = MultiExpert([spacing_multiexpert, contour_expert, rhythm_expert, simple_generative], 4, 3,  min_num, max_num, timestep_length, rhythm_encoding_size,
-		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
+	#contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], 3,
+	#	voices=voices, gen_length=gen_length, first_note=first_note, rng=rng)
+	#rhythm_expert = RhythmExpert(rhythm_encoding_size, max_num-min_num, [100,200,100], 3, 
+	#	timestep_info=timestep_info, prior_timestep_pitch_info=prior_timesteps, pieces=pieces, rhythm_info=rhythm_info, rng=rng)
+	#simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,3,
+	#	pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
+	model = MultiExpert([spacing_multiexpert], 4, 3,  min_num, max_num, timestep_length, rhythm_encoding_size,
+		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=False)
 	#model = instantiate_model('MultiExpert', min_num, max_num, timestep_length, visualize=True)
-	train(model, 'MultiExpert', dataset, articulation_data, min_num, max_num, timestep_length, visualize=True)
+	train(model, 'RhythmMultiExpert', dataset, articulation_data, min_num, max_num, timestep_length, visualize=False)
