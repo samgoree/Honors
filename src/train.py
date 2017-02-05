@@ -29,7 +29,7 @@ import numpy as np
 np.set_printoptions(threshold=np.inf)
 
 epsilon = 10e-9
-PPQ = 480 # pulses per quarter, a midi thing to determine how long a timestep is
+PPQ = 480 # pulses per quarter note -- a midi thing that specifies the length of a timestep
 
 
 # takes the path to a pickle file
@@ -234,10 +234,11 @@ def train(model, model_name, dataset, articulation_data, min_num, max_num, times
 		# every 100 minibatches, sample a piece
 		if minibatch_count % 100 == 0 or (stop_training_pitch and stop_training_articulation):
 			print("Minibatch", str(minibatch_count), " sampling...")
-			sample_piece = training_set[np.random.randint(len(training_set))]
+			sample_piece = validation_set[np.random.randint(len(validation_set))]
 			new_voice, new_articulation = model.generate(sample_piece)
 			store_weights(model, output_dir + str(minibatch_count) +'.p')
 			output_midi([timesteps_to_notes(new_voice, new_articulation, min_num, timestep_length * PPQ)], output_dir + str(minibatch_count) + '.mid')
+
 		minibatch_count += 1
 
 # store weights from model to a file at path
@@ -281,6 +282,7 @@ def load_weights(path):
 if __name__=='__main__':
 	#dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
 	dataset, articulation_data, min_num, max_num, timestep_length = pickle.load(open('../Data/music21_articulation_dataset.p', 'rb'))
+
 	rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
 	timestep_info = T.itensor3()
 	prior_timesteps=T.itensor4()

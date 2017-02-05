@@ -225,4 +225,3 @@ def onehot_matrix_to_int_vector(onehot):
 		if not cont: output.append(-1)
 		cont = False
 	return np.array(output)
-
