@@ -379,3 +379,84 @@ I left the chorale generation on overnight, and it turned out awful again. I am 
 Hold on, I'm getting the piece to generate from from the training set. That's fishy. I'm going to change it to the validation set and see if I get output that sounds as nice. The other idea I've got is to do generation in several voices simultaneously, which would take some rewriting of the generation scripts, but is probably doable. Well, how do I figure out spacing? What if I had a new model, where one model predicts each of the 6 different spacings and I have another for contour/rhythm for each voice? How would I take the product? I'd need to know the offset for that voice at that time. This is interesting math. I'd need the spacing models to interact in such a way that I combine the output of soprano/alto + alto/tenor with soprano/tenor. That said, this still feels like boostrapping. At what point do I get real pitch values? One voice needs to be set in stone. Or I need to do the Gibbs sampling thing. What if I regenerated voices instead of regenerating individual notes? That seems computationally simpler that doing effectively an entire generative run for each note multiple times.
 
 I'm going to try that since it's not too hard.
+
+While that's running, I'm going to look into visualizing generation through heatmaps and scores.
+
+Transparent generation would have to have steprec for everything return a probability distribution and have step in multiexpert return a 2d list of probabilities for each timestep, then generate would have to reshape them and return a 3d list of [sub-model, timestep, probability], then I could visualize it.
+
+Friday 1/27/17
+
+How does everything sound this bad??? It is doing so well generating based on the validation set, which it hasn't even seen before! Maybe I should train it on garbage other voices as well as good ones? No, but then it'll just learn bad things.
+
+For my own sanity, I tried generating each voice as if it had been put in the original piece. It still sounds awful. When it's unsure what note should go somewhere, it just kind of trills between the two (the network was probably outputting equal probability for each one). It really wants to have the articulation model, just the articulation data needs to be part of the output of the model as is, which means I need to do the partial softmax thing.
+
+Tuesday 1/31/17
+
+The US government is on the verge of collapse, or so it seems. In terms of implementation details, this encoding switch may prove difficult, but I think I have to try it. Why didn't I use a library like Keras from the start?? It's so much easier to set up... :(
+
+Articulation TODO:
+VoiceContour
+Rhythm
+Multiexpert
+train.py - probably finished?? I did timesteps to notes and load_dataset_music21, load_dataset doesn't support the timestep model, so it's now deprecated
+chorale_generator.py
+
+I've made the decision that the encoding size passed into the generative model will include the articulation bits, since it requires rewriting less code
+
+test:
+from train import *
+file_list = music21.corpus.getBachChorales()
+dataset, min_num, max_num, timestep_length = load_dataset_music21(file_list)
+model = SimpleGenerative(max_num-min_num+3, 3, [100,200,100], 4, 3)
+train(model, 'SimpleGenerative', dataset, min_num, max_num, timestep_length, output_dir=None, visualize=False)
+
+
+Wednesday 2/1/17
+
+How should other models implement the articulation encoding? Should the spacing model get as input the known voice's articulation or the unknown voice's? I think they should all just get the previous timestep's info from the voice they're predicting
+
+from train import *
+dataset, min_num, max_num, timestep_length = pickle.load(open('../Data/music21articulation.dataset', 'rb'))
+model = VoiceSpacingExpert(max_num-min_num+3, 3, [100,200,100], 0, 3)
+train(model, 'VoiceSpacingExpert', dataset, min_num, max_num, timestep_length, output_dir=None, visualize=False)
+
+I found an issue with voice spacing expert's system of translating from spacing to absolute pitches - the way I encode spacing wraps around negative values, but when I decode, I treat those as positive values. That means no unknown voice can be below a known voice. I'm going to solve that by adding half the encoding size to the values before converting them to onehot in training, then subtracting half the encoding size when converting back during generation. This is going to change steprec as well.
+
+Now for some reason it's always outputting 'rest'. I think I might have been softmaxing across the wrong axis, since it's no longer a softmax layer but a softmax function. Now that that's fixed, we actually train.
+Now I'm still getting a lot of rests because it's outputting sustain every timestep and if it sustains the first timestep, the result is a sustained rest. Why is it learning to sustain with almost 100% certainty? at least 10% of the training data is articulate.
+
+I honestly can't figure out what to do. The model keeps getting stuck in the minimum where it always outputs sustain because it usually is sustain. Older models have done the "note length" prediction model separately from the pitch one. That might be an option here. I'll ask Adam tomorrow.
+
+Friday 2/3/17
+
+Adam gave the pretty good suggestion that I should try the articulation expert again, but with a more balanced training set (i.e. don't train it with the same minibatches as the pitch experts, use a different sort of dataset that has more articulation timesteps and fewer sustain ones), so I'm going to try that out today. I'm also going to change the articulation model to have the timestep data as input.
+
+The issue of how to select training data becomes tricky. Ideally, I want to show the model all of the timesteps, so that it gets the right hidden states, but only update on some of them. What that means is that I need to select some timesteps to be involved in the loss calculation and some to not, so that outputting "sustain" every time is not better than outputting "articulate" with some inaccuracy according to patterns in training data. My best guess for that seems to be choosing some timesteps where the correct answer is sustain and multiplying their loss by 0, but I'm not sure how to do that in the minibatch setup I have.
+
+What if I add an additional parameter to my training function called "training_mask", then multiply the correct training data by the mask to determine if I train by it?
+
+Well, that seems to make it prefer articulating greatly. I want to actually look at articulate loss vs. sustain loss and see that breakdown.
+
+Saturday 2/4/17
+
+The output seems better, but now the changes to the voice spacing model are giving me issues. I really need a full note encoding for positive and negative distances, since spacings can be more than 1/2 of the total encoding reasonably often.
+
+Sunday 2/5/17
+
+There seems to also be a problem with the way I'm getting out contour probs to the product model. I think I should figure out where the min_num is relative to the "zero" of the relative encoding
+
+in the pdf of the contour output, next_note[max_num-prev_note] (both in midi numbers) is the min_num probability and next_note[2 * max_num - min_num - prev_note] is the max_num probability, assuming that next_note[max_num-min_num] is the prev_note probability
+
+**algebra!**
+
+The spacing output should be the same math, since it's also dealing with a relative pitch that can be above or below the predicted pitch
+
+so how do I slice different subarrays according to different start and end points? I think I have to do a map and then stack
+
+this math is probably wrong... I'm getting values that are higher than max_num, I'm going to go home and rest for a while then try again.
+
+I went home and showered and rested a bit, and it makes sense now: min_num = next_note[max_num-min_num-prev_note] because prev_note is already in reference to min_num, it's a one-hot encoding
+
+Now it's working, but the intervals are still really big. The notes make sense, so I'm unsure what's up. I think I'll work on the generation visualizer now and see if that helps.
+
+Lol I wasn't using all the experts yet. I'll check what happens now.

@@ -58,30 +58,32 @@ class VoiceSpacingExpert(GenerativeLSTM):
 	# known_voice_number is the number of the voice we know, same for unknown, these are a priori ints
 
 	# pieces and piece are for use with the product_of_experts model below, pieces is the training minibatch, piece is a piece to generate based on the known voice of
-	def __init__(self, encoding_size, network_shape, known_voice_number, unknown_voice_number, pieces=None, piece=None, rng=None):
+	def __init__(self, min_num, max_num, network_shape, known_voice_number, unknown_voice_number, pieces=None, piece=None, rng=None):
 		print("Building a Voice Spacing Expert")
 
 		self.known_voice_number = known_voice_number
 		self.unknown_voice_number = unknown_voice_number
+		self.encoding_size = encoding_size = max_num-min_num
 
 		#handle missing parameters
 		if pieces is None: pieces = T.itensor4()
 		if piece is None: piece = T.itensor3()
+		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
 
 		 #pieces has four dimensions: pieces, voices, time, pitch
 
 		known_voices = pieces[:,known_voice_number] # first dimension is piece, second is time, third is pitch
 		unknown_voices = pieces[:,unknown_voice_number] # same as above
 
-		spacing = onehot_to_int(unknown_voices) - onehot_to_int(known_voices)
-		onehot_spacing = int_matrix_to_onehot_tensor3(spacing, encoding_size)
+		spacing = T.maximum(T.minimum(onehot_to_int(unknown_voices) - onehot_to_int(known_voices) + encoding_size, encoding_size-1), 0)
+		onehot_spacing = int_matrix_to_onehot_tensor3(spacing, encoding_size * 2)
 
 
 
 		known_voice = piece[known_voice_number]
 		gen_length = known_voice.shape[0] # length of a generated sample - parameter to generation call
 
-		self.generated_probs, generated_spacing, rng_updates = super(VoiceSpacingExpert, self).__init__(None, encoding_size, network_shape, onehot_spacing, None, None, gen_length, rng=rng)
+		self.generated_probs, generated_spacing, rng_updates = super(VoiceSpacingExpert, self).__init__(None, encoding_size * 2, network_shape, onehot_spacing, None, None, gen_length, rng=rng)
 		self.params = self.model.params
 		self.layers = self.model.layers
 
@@ -90,7 +92,9 @@ class VoiceSpacingExpert(GenerativeLSTM):
 
 		updates, gsums, xsums, lr, max_norm  = theano_lstm.create_optimization_updates(cost, self.params, method='adadelta')
 
-		generated_voice = onehot_to_int(generated_spacing)+ onehot_to_int(known_voice)
+		generated_voice = int_vector_to_onehot_symbolic(onehot_to_int(generated_spacing)+ onehot_to_int(known_voice) - encoding_size, encoding_size)
+
+
 
 		self.train_internal = theano.function([pieces], cost, updates=updates, allow_input_downcast=True)
 		self.validate_internal = theano.function([pieces], cost, allow_input_downcast=True)
@@ -100,12 +104,15 @@ class VoiceSpacingExpert(GenerativeLSTM):
 		known_voice = known_voices[self.known_voice_number if self.known_voice_number < self.unknown_voice_number else self.known_voice_number-1]
 		prev_known_voice = prev_known_voices[self.known_voice_number if self.known_voice_number < self.unknown_voice_number else self.known_voice_number-1]
 		# this one fires on the difference between prev_note and prev_concurrent_notes[known_voice_number]
-		prev_spacing = T.set_subtensor(T.zeros_like(prev_note)[onehot_to_int(prev_note) 
-					- onehot_to_int(prev_known_voice)], 1)
+		prev_spacing = T.set_subtensor(T.zeros(self.encoding_size * 2)[onehot_to_int(prev_note) 
+					- onehot_to_int(prev_known_voice) + self.encoding_size], 1)
 		model_states = self.model.forward(prev_spacing, prev_hiddens)
 		new_states = model_states[:-1]
+
+		min_num_index = self.encoding_size-onehot_to_int(known_voice)
+		max_num_index = min_num_index + self.encoding_size
 		# changes the generated probs (which here are voice spacing) into absolute pitch by rolling the subtensors corresponding to each timestep in each instance by the value of the reference voice
-		final_probs = T.roll(model_states[-1], onehot_to_int(known_voice))
+		final_probs = T.roll(model_states[-1], onehot_to_int(known_voice) - self.encoding_size)[min_num_index:max_num_index]
 		return new_states, final_probs
 
 	def train(self, pieces, training_set, minibatch_size):
@@ -143,9 +150,12 @@ class VoiceContourExpert(GenerativeLSTM):
 		if voices is None: voices = T.itensor3()
 		if gen_length is None: gen_length = T.iscalar()
 		if first_note is None: first_note = T.iscalar()
+		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
 
 		self.voice_number = voice_number
-		self.encoding_size = max_num-min_num
+		self.max_num = max_num
+		self.min_num = min_num
+		self.encoding_size = encoding_size = max_num-min_num
 		
 		# voices' first dimension is piece, second is time, third is pitch
 		prev_notes = voices[:,:-1]
@@ -153,9 +163,9 @@ class VoiceContourExpert(GenerativeLSTM):
 		# take each note, subtract the value of the previous note
 		contour = onehot_to_int(voices[:,1:]) - onehot_to_int(prev_notes)
 		#contour = T.concatenate([T.zeros_like(contour[:,0]).dimshuffle(0, 'x'), contour], axis=1) # I think this was wrong
-		onehot_contour = int_matrix_to_onehot_tensor3(contour + self.encoding_size, self.encoding_size * 2)
+		onehot_contour = int_matrix_to_onehot_tensor3(contour + encoding_size, encoding_size * 2)
 
-		self.generated_probs, generated_contour, rng_updates = super(VoiceContourExpert, self).__init__(None, self.encoding_size * 2, network_shape, onehot_contour, None, None, gen_length, rng=rng)
+		self.generated_probs, generated_contour, rng_updates = super(VoiceContourExpert, self).__init__(None, encoding_size * 2, network_shape, onehot_contour, None, None, gen_length, rng=rng)
 		self.params = self.model.params
 		self.layers = self.model.layers
 
@@ -165,7 +175,7 @@ class VoiceContourExpert(GenerativeLSTM):
 
 		updates, gsums, xsums, lr, max_norm  = theano_lstm.create_optimization_updates(cost, self.params, method='adadelta')
 
-		first_note_and_contour = T.concatenate([first_note.dimshuffle('x'), onehot_to_int(generated_contour) - self.encoding_size])
+		first_note_and_contour = T.concatenate([first_note.dimshuffle('x'), onehot_to_int(generated_contour) - encoding_size])
 		#first_note = T.iscalar()
 		generated_voice = bounded_cumsum(first_note_and_contour, min_num, max_num)
 
@@ -176,13 +186,15 @@ class VoiceContourExpert(GenerativeLSTM):
 	def steprec(self, concurrent_notes, prev_concurrent_notes, known_voice, prev_known_voice, current_beat, prev_note, prev_prev_note, prev_hiddens):
 		# if we are on the first two timesteps, feed in prev_contour of 0
 		prev_contour = T.switch(T.gt(T.max(prev_note), 0),
-			T.set_subtensor(T.zeros([prev_note.shape[0]*2])[onehot_to_int(prev_note) - onehot_to_int(prev_prev_note) + self.encoding_size], 1),
-			T.set_subtensor(T.zeros([prev_note.shape[0]*2])[self.encoding_size], 1))
+			T.set_subtensor(T.zeros([prev_note.shape[0]*2])[onehot_to_int(prev_note) - onehot_to_int(prev_prev_note) + self.max_num - self.min_num], 1),
+			T.set_subtensor(T.zeros([prev_note.shape[0]*2])[self.max_num-self.min_num], 1))
 
 		# this one fires on the difference between the previous two notes
 		model_states = self.model.forward(prev_contour, prev_hiddens)
 		new_states = model_states[:-1]
-		final_probs = T.roll(model_states[-1], onehot_to_int(prev_note) - self.encoding_size)[self.encoding_size//2:(self.encoding_size*3)//2]
+		min_num_index = self.encoding_size-onehot_to_int(prev_note)
+		max_num_index = min_num_index + self.encoding_size
+		final_probs = T.roll(model_states[-1], onehot_to_int(prev_note) - (self.max_num - self.min_num))[min_num_index:max_num_index]
 		return new_states, final_probs
 
 	def train(self, pieces, training_set, minibatch_size):
@@ -231,6 +243,7 @@ class RhythmExpert(GenerativeLSTM):
 		if prior_timestep_pitch_info is None: prior_timestep_pitch_info = T.itensor4()
 		if pieces is None: pieces = T.itensor4()
 		if rhythm_info is None: rhythm_info = T.imatrix()
+		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
 		self.voice_number = voice_number
 		self.pitch_encoding_size = pitch_encoding_size
 		self.rhythm_encoding_size = rhythm_encoding_size

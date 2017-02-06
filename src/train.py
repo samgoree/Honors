@@ -66,6 +66,7 @@ def load_dataset(*filepath):
 	return timestep_data, min_num, max_num, gcd
 
 # uses the music21 dataset system instead of the mido powered midi parsing system to load a dataset
+# articulation data should be interpreted much as pitch timesteps, except instead of having max_num-min_num pitches, it has 3 possible one-hot values, articulate, sustain and rest, in that order
 def load_dataset_music21(file_list):
 	print("Loading music21 dataset")
 	raw_dataset = []
@@ -90,48 +91,65 @@ def load_dataset_music21(file_list):
 					if note.pitch.midi+1 > max_num: max_num = note.pitch.midi + 1
 					if gcd is None: gcd = note.duration.quarterLength
 					else: gcd = fractions.gcd(gcd, note.duration.quarterLength)
+				elif isinstance(note, music21.note.Rest):
+					stop_time = note.duration.quarterLength + note.offset
+					if stop_time > piece_length: piece_length = stop_time
+					if gcd is None: gcd = note.duration.quarterLength
+					else: gcd = fractions.gcd(gcd, note.duration.quarterLength)
+
+
 		piece_lengths.append(piece_length)
 	# convert each note to a list of timesteps
 	timestep_data = [np.zeros([len(raw_dataset[i].parts), int(piece_lengths[i]//gcd), max_num-min_num], dtype='int64')  for i in range(len(raw_dataset))]
+	articulation_data = [np.zeros([len(raw_dataset[i].parts), int(piece_lengths[i]//gcd), 3]) for i in range(len(raw_dataset))]
 	for i,score in enumerate(raw_dataset):
 		for j,voice in enumerate(score.parts):
 			for note in voice.flat:
 				if isinstance(note, music21.note.Note):
 					timestep_data[i][j,int(note.offset//gcd):int((note.offset + note.duration.quarterLength)//gcd), note.pitch.midi - min_num] = 1
-	return timestep_data, min_num,max_num,gcd
+					# set onehot of the first timestep of the note to 0
+					articulation_data[i][j,int(note.offset//gcd),0] = 1
+					# set onehot of the rest within the note to 1
+					articulation_data[i][j,int(note.offset//gcd)+1:int((note.offset + note.duration.quarterLength)//gcd), 1] = 1
+				elif isinstance(note, music21.note.Rest):
+					# set onehot of all the timesteps to 2
+					articulation_data[i][j,int(note.offset//gcd):int((note.offset + note.duration.quarterLength)//gcd), 2] = 1
+	return timestep_data, articulation_data, min_num,max_num,gcd
 
 # takes a list of one-hot encoded timesteps
 # the midi number of the 0-position encoding
-# the length of a timestep
+# the length of a timestep in midi timesteps
 # outputs a list of notes
-def timesteps_to_notes(one_hot_voice, min_num, timestep_length):
+def timesteps_to_notes(one_hot_voice, one_hot_articulation, min_num, timestep_length_midi):
 	voice = onehot_matrix_to_int_vector(one_hot_voice) if one_hot_voice.ndim==2 else one_hot_voice
+	articulation = onehot_matrix_to_int_vector(one_hot_articulation) if one_hot_articulation.ndim==2 else one_hot_articulation
+	if len(voice) != len(articulation):
+		print("Error, paired voice (len",len(voice), ") and articulation (len ", len(articulation), ") are not the same length.")
+		sys.exit(1)
 	i = 0
 	curr_note = None
 	curr_time = 0
 	notes = []
 	stats = [0,0,0]
 	while i < len(voice):
-		if curr_note is not None and voice[i] + min_num == curr_note.num:
-			stats[1]+=1
-		elif curr_note is not None:
-
-			curr_note.stop_time = curr_time
-			notes.append(curr_note)
-			if voice[i] == -1:
-				stats[2]+=1
+		stats[articulation[i]] += 1
+		# articulate
+		if articulation[i] == 0:
+			if curr_note is not None:
+				curr_note.stop_time = curr_time
+				notes.append(curr_note)
+			curr_note = Note(voice[i] + min_num, curr_time)
+		# sustain
+		elif articulation[i] == 1:
+			pass
+		# rest
+		elif articulation[i] == 2:
+			if curr_note is not None:
+				curr_note.stop_time = curr_time
+				notes.append(curr_note)
 				curr_note = None
-			else:
-				stats[0]+=1
-				curr_note = Note(voice[i] + min_num, curr_time)
-		else:
-			if voice[i] != -1:
-				stats[0]+=1
-				curr_note = Note(voice[i] + min_num, curr_time)
-			else:
-				stats[2] += 1
+		curr_time += timestep_length_midi
 		i+=1
-		curr_time += timestep_length
 	print(stats)
 	return notes
 
@@ -142,7 +160,7 @@ def timesteps_to_notes(one_hot_voice, min_num, timestep_length):
 # min_num, max_num and timestep_length are constants describing the dataset, load_dataset returns them
 # if output dir is not specified, it will create a new one
 # visualize tells us whether or not to call the visualization function, for now this is only supported with MultiExpert
-def train(model, model_name, dataset, min_num, max_num, timestep_length, output_dir=None, visualize=False):
+def train(model, model_name, dataset, articulation_data, min_num, max_num, timestep_length, output_dir=None, visualize=False):
 	
 	if output_dir is None:
 		output_dir = '../Data/Output/' + model_name +'/' + strftime("%a,%d,%H:%M", localtime())+ '/'
@@ -152,11 +170,17 @@ def train(model, model_name, dataset, min_num, max_num, timestep_length, output_
 	# make validation set
 	validation_pieces = np.random.choice(len(dataset), size=len(dataset)//4, replace=False)
 	validation_set = []
+	validation_set_articulation = []
 	training_set = []
+	training_set_articulation = []
 	for i in range(len(dataset)):
 		if i in validation_pieces:
 			validation_set.append(dataset[i])
-		else: training_set.append(dataset[i])
+			validation_set_articulation.append(articulation_data[i])
+		else: 
+			training_set.append(dataset[i])
+			training_set_articulation.append(articulation_data[i])
+
 
 	# magic number - a minibatch element is four bars
 	minibatch_size = int(16//timestep_length)
@@ -167,39 +191,54 @@ def train(model, model_name, dataset, min_num, max_num, timestep_length, output_
 	# main training loop
 	minibatch_count = 0 if visualize else 1
 	best_loss = np.inf
-	terminate = False
-	while not terminate:
+	best_articulation_loss = np.inf
+	stop_training_pitch = False
+	stop_training_articulation = False
+	while not (stop_training_pitch and stop_training_articulation):
 		# choose our minibatch
 		pieces = np.random.choice(len(training_set), size=minibatch_number, replace=False)
 		# train
-		print('Minibatch', minibatch_count, ": ", model.train(pieces, training_set, minibatch_size))
+		if not stop_training_pitch:
+			print('Minibatch', minibatch_count, " pitch model: ", model.train(pieces, training_set, minibatch_size))
+		if not stop_training_articulation:
+			print('Minibatch', minibatch_count, " articulation model: ", model.articulation_model.train(pieces, training_set_articulation, minibatch_size))
 		# every 20 minibatches, validate
 		if minibatch_count % 20 == 0:
 			print("Minibatch ", minibatch_count)
 			pieces = np.arange(len(validation_set))
 			validation_minibatch_size = min([len(piece[0]) for piece in validation_set])
 			# validate
-			if visualize:
+			if visualize and not stop_training_pitch:
 				loss, minibatch, prior_timesteps, timestep_info = model.validate(pieces, validation_set, validation_minibatch_size)
+				articulation_loss = model.articulation_model.validate(pieces, validation_set_articulation, validation_minibatch_size)
 				if not os.path.exists(output_dir + 'visualize/'): os.mkdir(output_dir + 'visualize/')
 				if type(model) is MultiExpert:
 					visualize_multiexpert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) +'/')
 				else:
 					visualize_expert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) + '/')
-			else:
+			elif not visualize and not stop_training_pitch:
 				loss = model.validate(pieces, validation_set, validation_minibatch_size)
+				articulation_loss = model.articulation_model.validate(pieces, validation_set_articulation, validation_minibatch_size)
+			else:
+				articulation_loss = model.articulation_model.validate(pieces, validation_set_articulation, validation_minibatch_size)
 			print("Loss: ", loss)
+			print("Articulation Loss: ", articulation_loss)
 			if loss < best_loss + epsilon: best_loss = loss
 			else:
 				print("Loss increasing, finishing training...")
-				terminate = True
+				stop_training_pitch = True
+			if articulation_loss < best_articulation_loss + epsilon: best_articulation_loss = articulation_loss
+			else:
+				print("Articulation loss increasing, finishing training...")
+				stop_training_articulation = True
 		# every 100 minibatches, sample a piece
-		if minibatch_count % 100 == 0 or terminate:
+		if minibatch_count % 100 == 0 or (stop_training_pitch and stop_training_articulation):
 			print("Minibatch", str(minibatch_count), " sampling...")
 			sample_piece = validation_set[np.random.randint(len(validation_set))]
-			new_voice = model.generate(sample_piece)
-			store_weights(model, output_dir + model_name + str(minibatch_count) +'.p')
-			output_midi([timesteps_to_notes(new_voice, min_num, timestep_length * PPQ)], output_dir + model_name + str(minibatch_count) + '.mid')
+			new_voice, new_articulation = model.generate(sample_piece)
+			store_weights(model, output_dir + str(minibatch_count) +'.p')
+			output_midi([timesteps_to_notes(new_voice, new_articulation, min_num, timestep_length * PPQ)], output_dir + str(minibatch_count) + '.mid')
+
 		minibatch_count += 1
 
 # store weights from model to a file at path
@@ -242,7 +281,8 @@ def load_weights(path):
 
 if __name__=='__main__':
 	#dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
-	dataset, min_num, max_num, timestep_length = pickle.load(open('../Data/music21.dataset', 'rb'))
+	dataset, articulation_data, min_num, max_num, timestep_length = pickle.load(open('../Data/music21_articulation_dataset.p', 'rb'))
+
 	rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
 	timestep_info = T.itensor3()
 	prior_timesteps=T.itensor4()
@@ -257,7 +297,7 @@ if __name__=='__main__':
 
 	spacing_models = []
 	for i in range(3):
-		spacing_models.append(VoiceSpacingExpert(max_num-min_num, [100,200,100], i, 3,pieces=pieces, piece=piece, rng=rng))
+		spacing_models.append(VoiceSpacingExpert(min_num,max_num, [100,200,100], i, 3,pieces=pieces, piece=piece, rng=rng))
 	spacing_multiexpert = MultiExpert(spacing_models, 4, 3, min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
 	contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], 3,
@@ -268,5 +308,4 @@ if __name__=='__main__':
 		pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
 	model = MultiExpert([spacing_multiexpert, contour_expert, rhythm_expert, simple_generative], 4, 3,  min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
-	#model = instantiate_model('MultiExpert', min_num, max_num, timestep_length, visualize=True)
-	train(model, 'MultiExpert', dataset, min_num, max_num, timestep_length, visualize=True)
+	train(model, 'RhythmMultiExpert', dataset, articulation_data, min_num, max_num, timestep_length, visualize=True)
