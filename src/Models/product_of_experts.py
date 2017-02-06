@@ -159,7 +159,7 @@ class MultiExpert:
 			#fire articulation model
 			articulation_states, articulation_probs = self.articulation_model.steprec(prev_articulation, current_beat, prev_hiddens[self.hidden_partitions[-1]:])
 			model_states += articulation_states
-			articulation = theano.printing.Print('articulation')(rng.choice(size=[1], a=3, p=theano.printing.Print('articulation probs')(articulation_probs))[0])
+			articulation = rng.choice(size=[1], a=3, p=articulation_probs)[0]
 			rest = T.zeros_like(prev_note)
 
 			# if the articulation is sustain

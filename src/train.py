@@ -189,7 +189,7 @@ def train(model, model_name, dataset, articulation_data, min_num, max_num, times
 
 	print("Training...")
 	# main training loop
-	minibatch_count = 0 #if visualize else 1
+	minibatch_count = 0 if visualize else 1
 	best_loss = np.inf
 	best_articulation_loss = np.inf
 	stop_training_pitch = False
@@ -300,13 +300,12 @@ if __name__=='__main__':
 		spacing_models.append(VoiceSpacingExpert(min_num,max_num, [100,200,100], i, 3,pieces=pieces, piece=piece, rng=rng))
 	spacing_multiexpert = MultiExpert(spacing_models, 4, 3, min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
-	#contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], 3,
-	#	voices=voices, gen_length=gen_length, first_note=first_note, rng=rng)
-	#rhythm_expert = RhythmExpert(rhythm_encoding_size, max_num-min_num, [100,200,100], 3, 
-	#	timestep_info=timestep_info, prior_timestep_pitch_info=prior_timesteps, pieces=pieces, rhythm_info=rhythm_info, rng=rng)
-	#simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,3,
-	#	pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
-	model = MultiExpert([spacing_multiexpert], 4, 3,  min_num, max_num, timestep_length, rhythm_encoding_size,
-		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=False)
-	#model = instantiate_model('MultiExpert', min_num, max_num, timestep_length, visualize=True)
-	train(model, 'RhythmMultiExpert', dataset, articulation_data, min_num, max_num, timestep_length, visualize=False)
+	contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], 3,
+		voices=voices, gen_length=gen_length, first_note=first_note, rng=rng)
+	rhythm_expert = RhythmExpert(rhythm_encoding_size, max_num-min_num, [100,200,100], 3, 
+		timestep_info=timestep_info, prior_timestep_pitch_info=prior_timesteps, pieces=pieces, rhythm_info=rhythm_info, rng=rng)
+	simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,3,
+		pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
+	model = MultiExpert([spacing_multiexpert, contour_expert, rhythm_expert, simple_generative], 4, 3,  min_num, max_num, timestep_length, rhythm_encoding_size,
+		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
+	train(model, 'RhythmMultiExpert', dataset, articulation_data, min_num, max_num, timestep_length, visualize=True)

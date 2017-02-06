@@ -43,7 +43,7 @@ class ArticulationModel(GenerativeLSTM):
 		costA = -T.sum(T.log((self.generated_probs * maskA).nonzero_values()))
 		costB = -T.sum(T.log((self.generated_probs * maskB).nonzero_values()))
 		costC = -T.sum(T.log((self.generated_probs * maskC).nonzero_values()))
-		cost = theano.printing.Print('costA:')(costA) + theano.printing.Print('costB:')(costB) + theano.printing.Print('costC:')(costC)
+		cost = costA + costB + costC
 
 		updates, gsums, xsums, lr, max_norm  = theano_lstm.create_optimization_updates(cost, self.params, method='adadelta')
 

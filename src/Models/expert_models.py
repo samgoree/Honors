@@ -109,7 +109,7 @@ class VoiceSpacingExpert(GenerativeLSTM):
 		model_states = self.model.forward(prev_spacing, prev_hiddens)
 		new_states = model_states[:-1]
 
-		min_num_index = self.encoding_size-onehot_to_int(prev_note)
+		min_num_index = self.encoding_size-onehot_to_int(known_voice)
 		max_num_index = min_num_index + self.encoding_size
 		# changes the generated probs (which here are voice spacing) into absolute pitch by rolling the subtensors corresponding to each timestep in each instance by the value of the reference voice
 		final_probs = T.roll(model_states[-1], onehot_to_int(known_voice) - self.encoding_size)[min_num_index:max_num_index]
@@ -155,7 +155,7 @@ class VoiceContourExpert(GenerativeLSTM):
 		self.voice_number = voice_number
 		self.max_num = max_num
 		self.min_num = min_num
-		encoding_size = max_num-min_num
+		self.encoding_size = encoding_size = max_num-min_num
 		
 		# voices' first dimension is piece, second is time, third is pitch
 		prev_notes = voices[:,:-1]
@@ -192,8 +192,8 @@ class VoiceContourExpert(GenerativeLSTM):
 		# this one fires on the difference between the previous two notes
 		model_states = self.model.forward(prev_contour, prev_hiddens)
 		new_states = model_states[:-1]
-		min_num_index = self.max_num-onehot_to_int(prev_note)
-		max_num_index = 2 * self.max_num - onehot_to_int(prev_note) - self.min_num
+		min_num_index = self.encoding_size-onehot_to_int(prev_note)
+		max_num_index = min_num_index + self.encoding_size
 		final_probs = T.roll(model_states[-1], onehot_to_int(prev_note) - (self.max_num - self.min_num))[min_num_index:max_num_index]
 		return new_states, final_probs
 

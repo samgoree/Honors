@@ -456,3 +456,7 @@ so how do I slice different subarrays according to different start and end point
 this math is probably wrong... I'm getting values that are higher than max_num, I'm going to go home and rest for a while then try again.
 
 I went home and showered and rested a bit, and it makes sense now: min_num = next_note[max_num-min_num-prev_note] because prev_note is already in reference to min_num, it's a one-hot encoding
+
+Now it's working, but the intervals are still really big. The notes make sense, so I'm unsure what's up. I think I'll work on the generation visualizer now and see if that helps.
+
+Lol I wasn't using all the experts yet. I'll check what happens now.
