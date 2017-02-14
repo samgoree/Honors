@@ -6,7 +6,7 @@ import os
 
 from Utilities.note import Note
 from Utilities.midi_parser_random import output_midi
-from Utilities.visualizer import visualize_multiexpert
+from Utilities.visualizer import *
 from Models.generative import *
 from Models.identity import Identity
 from Models.product_of_experts import MultiExpert
@@ -27,6 +27,9 @@ import music21
 
 import numpy as np
 np.set_printoptions(threshold=np.inf)
+
+VALIDATION_EVERY = 100
+GENERATION_EVERY = 200
 
 epsilon = 10e-9
 PPQ = 480 # pulses per quarter note -- a midi thing that specifies the length of a timestep
@@ -183,7 +186,7 @@ def train(model, model_name, dataset, articulation_data, min_num, max_num, times
 
 
 	# magic number - a minibatch element is four bars
-	minibatch_size = int(16//timestep_length)
+	minibatch_size = int(32//timestep_length)
 	# magic number - a minibatch is 20 such segments
 	minibatch_number = 20
 
@@ -199,17 +202,17 @@ def train(model, model_name, dataset, articulation_data, min_num, max_num, times
 		pieces = np.random.choice(len(training_set), size=minibatch_number, replace=False)
 		# train
 		if not stop_training_pitch:
-			print('Minibatch', minibatch_count, " pitch model: ", model.train(pieces, training_set, minibatch_size))
+			print('Minibatch', minibatch_count, " pitch model: ", model.train(pieces, training_set, training_set_articulation, minibatch_size))
 		if not stop_training_articulation:
 			print('Minibatch', minibatch_count, " articulation model: ", model.articulation_model.train(pieces, training_set_articulation, minibatch_size))
 		# every 20 minibatches, validate
-		if minibatch_count % 20 == 0:
+		if minibatch_count % VALIDATION_EVERY == 0:
 			print("Minibatch ", minibatch_count)
 			pieces = np.arange(len(validation_set))
 			validation_minibatch_size = min([len(piece[0]) for piece in validation_set])
 			# validate
 			if visualize and not stop_training_pitch:
-				loss, minibatch, prior_timesteps, timestep_info = model.validate(pieces, validation_set, validation_minibatch_size)
+				loss, minibatch, prior_timesteps, timestep_info = model.validate(pieces, validation_set, validation_set_articulation, validation_minibatch_size)
 				articulation_loss = model.articulation_model.validate(pieces, validation_set_articulation, validation_minibatch_size)
 				if not os.path.exists(output_dir + 'visualize/'): os.mkdir(output_dir + 'visualize/')
 				if type(model) is MultiExpert:
@@ -217,7 +220,7 @@ def train(model, model_name, dataset, articulation_data, min_num, max_num, times
 				else:
 					visualize_expert(model, minibatch[:10], prior_timesteps[:10], timestep_info[:10], directory=output_dir + 'visualize/minibatch' + str(minibatch_count) + '/')
 			elif not visualize and not stop_training_pitch:
-				loss = model.validate(pieces, validation_set, validation_minibatch_size)
+				loss = model.validate(pieces, validation_set, validation_set_articulation, validation_minibatch_size)
 				articulation_loss = model.articulation_model.validate(pieces, validation_set_articulation, validation_minibatch_size)
 			else:
 				articulation_loss = model.articulation_model.validate(pieces, validation_set_articulation, validation_minibatch_size)
@@ -232,10 +235,24 @@ def train(model, model_name, dataset, articulation_data, min_num, max_num, times
 				print("Articulation loss increasing, finishing training...")
 				stop_training_articulation = True
 		# every 100 minibatches, sample a piece
-		if minibatch_count % 100 == 0 or (stop_training_pitch and stop_training_articulation):
+		if minibatch_count % GENERATION_EVERY == 0 or (stop_training_pitch and stop_training_articulation):
 			print("Minibatch", str(minibatch_count), " sampling...")
-			sample_piece = validation_set[np.random.randint(len(validation_set))]
-			new_voice, new_articulation = model.generate(sample_piece)
+			n = np.random.randint(len(validation_set))
+			sample_piece = validation_set[n]
+			sample_articulation = validation_set_articulation[n]
+			if visualize:
+				new_voice, new_articulation, probs = model.generate(sample_piece, sample_articulation)
+				for expert_model,p in zip(model.expert_models, probs):
+					visualize_probs(p, title=expert_model.__class__.__name__ + 'GeneratedOutput' + str(minibatch_count), 
+						path=output_dir + expert_model.__class__.__name__ + 'GeneratedOutput' + str(minibatch_count))
+				visualize_probs(probs[-1], title= 'ArticulationModelGeneratedOutput' + str(minibatch_count), 
+						path=output_dir + 'ArticulationModelGeneratedOutput' + str(minibatch_count))
+				visualize_probs(probs[-2], title= 'FinalGeneratedOutput' + str(minibatch_count), 
+						path = output_dir + 'FinalGeneratedOutput' + str(minibatch_count))
+
+
+			else:
+				new_voice, new_articulation = model.generate(sample_piece, sample_articulation)
 			store_weights(model, output_dir + str(minibatch_count) +'.p')
 			output_midi([timesteps_to_notes(new_voice, new_articulation, min_num, timestep_length * PPQ)], output_dir + str(minibatch_count) + '.mid')
 
@@ -280,6 +297,7 @@ def load_weights(path):
 	return model"""
 
 if __name__=='__main__':
+	VOICE_TO_PREDICT = 0
 	#dataset, min_num, max_num, timestep_length = load_dataset("../Data/train.p", "../Data/validate.p")
 	dataset, articulation_data, min_num, max_num, timestep_length = pickle.load(open('../Data/music21_articulation_dataset.p', 'rb'))
 
@@ -290,22 +308,23 @@ if __name__=='__main__':
 	piece=T.itensor3()
 	rng = theano.tensor.shared_randomstreams.RandomStreams()
 	# do some symbolic variable manipulation so that we can compile a function with updates for all the models
-	voices = pieces[:,3]
+	voices = pieces[:,VOICE_TO_PREDICT]
 	gen_length = piece.shape[1]
-	first_note = T.argmax(piece[3,0])
+	first_note = T.argmax(piece[0,VOICE_TO_PREDICT])
 	rhythm_info = theano.map(lambda a, t: T.set_subtensor(T.zeros(t)[a % t], 1), sequences=T.arange(gen_length), non_sequences=rhythm_encoding_size)[0]
 
 	spacing_models = []
 	for i in range(3):
-		spacing_models.append(VoiceSpacingExpert(min_num,max_num, [100,200,100], i, 3,pieces=pieces, piece=piece, rng=rng))
-	spacing_multiexpert = MultiExpert(spacing_models, 4, 3, min_num, max_num, timestep_length, rhythm_encoding_size,
-		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
-	contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], 3,
+		if i == VOICE_TO_PREDICT: continue
+		spacing_models.append(VoiceSpacingExpert(min_num,max_num, [100,200,100], i, VOICE_TO_PREDICT,pieces=pieces, piece=piece, rng=rng))
+	spacing_multiexpert = MultiExpert(spacing_models, 4, VOICE_TO_PREDICT, min_num, max_num, timestep_length, rhythm_encoding_size,
+		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=False)
+	contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], VOICE_TO_PREDICT,
 		voices=voices, gen_length=gen_length, first_note=first_note, rng=rng)
-	rhythm_expert = RhythmExpert(rhythm_encoding_size, max_num-min_num, [100,200,100], 3, 
+	rhythm_expert = RhythmExpert(rhythm_encoding_size, max_num-min_num, [100,200,100], VOICE_TO_PREDICT, 
 		timestep_info=timestep_info, prior_timestep_pitch_info=prior_timesteps, pieces=pieces, rhythm_info=rhythm_info, rng=rng)
-	simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,3,
+	simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,VOICE_TO_PREDICT,
 		pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
-	model = MultiExpert([spacing_multiexpert, contour_expert, rhythm_expert, simple_generative], 4, 3,  min_num, max_num, timestep_length, rhythm_encoding_size,
+	model = MultiExpert([spacing_multiexpert, contour_expert, rhythm_expert, simple_generative], 4, VOICE_TO_PREDICT,  min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
-	train(model, 'RhythmMultiExpert', dataset, articulation_data, min_num, max_num, timestep_length, visualize=True)
+	train(model, 'longer_minibatches', dataset, articulation_data, min_num, max_num, timestep_length, visualize=True)

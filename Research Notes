@@ -460,3 +460,29 @@ I went home and showered and rested a bit, and it makes sense now: min_num = nex
 Now it's working, but the intervals are still really big. The notes make sense, so I'm unsure what's up. I think I'll work on the generation visualizer now and see if that helps.
 
 Lol I wasn't using all the experts yet. I'll check what happens now.
+
+Monday 2/6/17
+
+It's outputting more music, the rhythm experts definitely made it sound a lot more consistent, but the individually-rhythmically appropriate voices are out of sync with each other. What if my articulation expert had other voices' articulation as input as well?
+
+Wednesday 2/8/17
+
+That was super easy to implement and seems to help? I don't really know at this point.
+
+I also had the idea to use the same training set dropout system on the pitch models -- only train on timesteps that articulate -- so that the model is not learning a lot for timesteps it's not needed for. I did that using the same system, but am now figuring out the articulation dataset in both the pitch and articulation training functions. If I end up refactoring, this is a good place to cut code and time by merging the two and doing the halting process within the product of experts model function.
+
+This also means that train.py has abandoned compatability with any model except for the product model, which is fine because you can always have a product of one, but should probably be documented somewhere.
+
+Thursday 2/9/17
+
+Lol when I switched to the music21 dataset, I didn't think to make sure 0 was still bass and 3 was still soprano. I've been naming my models backwards this whole time. 
+
+Monday 2/13/17
+
+I have an outline for my paper and a draft survey to administer now, so that part of the project, at least, is going as planned.
+I'm trying two things, one kind of weird, one not: I'm experimenting leaving out the softmax layers in the middle of a multiexpert, so the outputs from the expert models are not forced to fit a probability distribution. This might mess up the product weighting horribly, but also might allow some experts to *dislike* certain notes as much as other experts like them. If it doesn't work, it'll be super easy to switch back, so it seems fine.
+Second, I'm experimenting with lower sustain dropout in the articulation model. I noticed the opposite problem to what I had before, too many articulation timesteps, so maybe 50% was too much.
+
+no softmax does not work, weighted product does not work with zero or negative numbers. I would need to have another neural network layer combine them, and I'm not sure how to do that.
+
+increasing minibatch size also doesn't seem to work because there is one piece in the training set that is too short, so I removed that peice

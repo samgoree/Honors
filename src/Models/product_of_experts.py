@@ -35,16 +35,20 @@ class MultiExpert:
 	# timestep_info is the rhythm information about pieces
 	# piece is for generation, a full piece, first dimension is voice, second is time, third is pitch
 	def __init__(self, sub_experts, num_voices, voice_to_predict,  min_num, max_num, timestep_length, rhythm_encoding_size,
-					pieces=None, prior_timesteps=None, timestep_info=None, piece=None, rng=None, transparent=False):
+					pieces=None, prior_timesteps=None, timestep_info=None, piece=None, gen_articulation=None, rng=None, transparent=False):
 		print("Building a multi-expert")
 		# handle missing parameters
 		if pieces is None: pieces = T.itensor4()
 		if prior_timesteps is None: prior_timesteps = T.itensor4()
 		if timestep_info is None: timestep_info = T.itensor3()
 		if piece is None: piece = T.itensor3()
+		if gen_articulation is None: gen_articulation = T.itensor3()
 		if rng is None: rng = theano.tensor.shared_randomstreams.RandomStreams()
 
+		training_mask = T.ones_like(pieces[:,voice_to_predict])
+
 		self.transparent = transparent
+		self.voice_to_predict = voice_to_predict
 
 		self.rhythm_encoding_size = rhythm_encoding_size
 		self.pitch_encoding_size = max_num - min_num
@@ -57,7 +61,8 @@ class MultiExpert:
 
 		# instantiate all of our experts
 
-		self.articulation_model = ArticulationModel(3, rhythm_encoding_size, [100,200,100], voice_to_predict, timestep_info=timestep_info, rhythm_info=rhythm_info, rng=rng)
+		self.articulation_model = ArticulationModel(3, rhythm_encoding_size, [100,200,100], voice_to_predict, num_voices, timestep_info=timestep_info, 
+			rhythm_info=rhythm_info, piece_articulation=gen_articulation, rng=rng)
 		
 		expert_probs = []
 		self.hidden_partitions = [0]
@@ -121,14 +126,14 @@ class MultiExpert:
 
 		# calculate error
 
-		mask = pieces[:,voice_to_predict]
+		mask = pieces[:,voice_to_predict] * training_mask # elementwise product - each value of training_mask should be 1 or 0.
 		cost = -T.sum(T.log((self.generated_probs * mask).nonzero_values()))
 
 		updates, gsums, xsums, lr, max_norm  = theano_lstm.create_optimization_updates(cost, self.params, method='adadelta')
 
 		# compile training and validation functions for the product model
-		self.train_internal = theano.function([pieces, prior_timesteps, timestep_info], cost, updates=updates, allow_input_downcast=True, on_unused_input='ignore')
-		self.validate_internal = theano.function([pieces,prior_timesteps, timestep_info], cost, allow_input_downcast=True, on_unused_input='ignore')
+		self.train_internal = theano.function([pieces, prior_timesteps, timestep_info, training_mask], cost, updates=updates, allow_input_downcast=True, on_unused_input='ignore')
+		self.validate_internal = theano.function([pieces,prior_timesteps, timestep_info, training_mask], cost, allow_input_downcast=True, on_unused_input='ignore')
 
 		# if we're being transparent (slightly slower setup), we make some more functions
 		if transparent:
@@ -145,20 +150,28 @@ class MultiExpert:
 		all_but_one_voice = (T.sum(piece[0:voice_to_predict], axis=0) 
 			+ T.sum(piece[voice_to_predict+1:], axis=0)) if voice_to_predict + 1 < num_voices else T.sum(piece[0:voice_to_predict], axis=0)
 		known_voices = T.concatenate([piece[0:voice_to_predict], piece[voice_to_predict+1:]]) if voice_to_predict + 1 < num_voices else piece[0:voice_to_predict]
+		known_articulations = T.concatenate([gen_articulation[0:voice_to_predict], gen_articulation[voice_to_predict+1:]]) if voice_to_predict + 1 < num_voices else gen_articulation[0:voice_to_predict]
 		unknown_voice = piece[voice_to_predict] # same as above
 		beat_info = int_vector_to_onehot_symbolic(T.arange(0, unknown_voice.shape[0]) % self.rhythm_encoding_size, self.rhythm_encoding_size)
 
 
-
-		def step(concurrent_notes, prev_concurrent_notes, known_voices, prev_known_voices, current_beat, prev_note, prev_prev_note, prev_articulation, *prev_hiddens):
-			model_states, output_probs = self.steprec(concurrent_notes, prev_concurrent_notes, known_voices, prev_known_voices, current_beat, prev_note, 
-				prev_prev_note, prev_hiddens[:self.hidden_partitions[-1]])
+		# if we're being transparent, we end up returning a probability vector for each model (in the same order as sub_experts) for each timestep
+		def step(concurrent_notes, prev_concurrent_notes, known_voices, prev_known_voices, current_beat, current_articulations, prev_note, prev_prev_note, prev_articulation, *prev_hiddens):
+			if self.transparent:
+				model_states, output_probs, internal_probs = self.steprec(concurrent_notes, prev_concurrent_notes, known_voices, prev_known_voices, current_beat, prev_note, 
+					prev_prev_note, prev_hiddens[:self.hidden_partitions[-1]])
+			else:
+				model_states, output_probs = self.steprec(concurrent_notes, prev_concurrent_notes, known_voices, prev_known_voices, current_beat, prev_note, 
+					prev_prev_note, prev_hiddens[:self.hidden_partitions[-1]])
 
 			# sample from dist
 			chosen_pitch = rng.choice(size=[1], a=self.pitch_encoding_size, p=output_probs)[0]
 
 			#fire articulation model
-			articulation_states, articulation_probs = self.articulation_model.steprec(prev_articulation, current_beat, prev_hiddens[self.hidden_partitions[-1]:])
+			articulation_states, articulation_probs = self.articulation_model.steprec(prev_articulation, current_beat, current_articulations, prev_hiddens[self.hidden_partitions[-1]:])
+			if self.transparent:
+				internal_probs.append(articulation_probs)
+				internal_probs.append(output_probs)
 			model_states += articulation_states
 			articulation = rng.choice(size=[1], a=3, p=articulation_probs)[0]
 			rest = T.zeros_like(prev_note)
@@ -168,15 +181,32 @@ class MultiExpert:
 				theano.ifelse.ifelse(T.eq(articulation,1), prev_note, rest))
 			articulation_onehot = T.cast(int_to_onehot(articulation, 3), 'int64')
 
-			return [current_timestep_onehot, articulation_onehot] + model_states
+			if self.transparent: return [current_timestep_onehot, articulation_onehot] + internal_probs + model_states
+			else: return [current_timestep_onehot, articulation_onehot] + model_states
 
 		# I am dimshuffling the known_voices so that we loop over the right axis (time), so the new dimensions are time, voice, pitch
-		results, gen_updates = theano.scan(step, n_steps=all_but_one_voice.shape[0], sequences = [dict(input=T.concatenate([T.zeros([1,all_but_one_voice.shape[1]]),all_but_one_voice], axis=0), taps=[0,-1]), 
-									dict(input=T.concatenate([T.zeros([known_voices.shape[0], 1 ,known_voices.shape[2]]),known_voices], axis=1).dimshuffle(1,0,2), taps=[0,-1]), dict(input=beat_info, taps=[0])],
-									outputs_info=[dict(initial=T.zeros([2, self.pitch_encoding_size], dtype='int64'), taps=[-1,-2]), dict(initial=T.zeros([3], dtype='int64'), taps=[-1])] + 
-									[dict(initial=layer.initial_hidden_state, taps=[-1]) for layer in self.layers + self.articulation_model.layers if hasattr(layer, 'initial_hidden_state')])
+		if self.transparent:
+			results, gen_updates = theano.scan(step, n_steps=all_but_one_voice.shape[0], sequences = [
+										dict(input=T.concatenate([T.zeros([1,all_but_one_voice.shape[1]]),all_but_one_voice], axis=0), taps=[0,-1]), 
+										dict(input=T.concatenate([T.zeros([known_voices.shape[0], 1 ,known_voices.shape[2]]),known_voices], axis=1).dimshuffle(1,0,2), taps=[0,-1]), 
+										dict(input=beat_info, taps=[0]),
+										dict(input=known_articulations.dimshuffle(1,0,2), taps=[0])],
+									outputs_info=[dict(initial=T.zeros([2, self.pitch_encoding_size], dtype='int64'), taps=[-1,-2]), 
+										dict(initial=T.zeros([3], dtype='int64'), taps=[-1])] + 
+										[None] * (len(sub_experts) + 2) + 
+										[dict(initial=layer.initial_hidden_state, taps=[-1]) for layer in self.layers + self.articulation_model.layers if hasattr(layer, 'initial_hidden_state')])
+			self.generate_internal = theano.function([piece, gen_articulation], results[0:3+len(sub_experts)], updates=gen_updates, allow_input_downcast=True, on_unused_input='ignore')
+		else: 
+			results, gen_updates = theano.scan(step, n_steps=all_but_one_voice.shape[0], sequences = [
+										dict(input=T.concatenate([T.zeros([1,all_but_one_voice.shape[1]]),all_but_one_voice], axis=0), taps=[0,-1]), 
+										dict(input=T.concatenate([T.zeros([known_voices.shape[0], 1 ,known_voices.shape[2]]),known_voices], axis=1).dimshuffle(1,0,2), taps=[0,-1]), 
+										dict(input=beat_info, taps=[0]),
+										dict(input=known_articulations.dimshuffle(1,0,2), taps=[0])],
+									outputs_info=[dict(initial=T.zeros([2, self.pitch_encoding_size], dtype='int64'), taps=[-1,-2]), 
+										dict(initial=T.zeros([3], dtype='int64'), taps=[-1])] + 
+										[dict(initial=layer.initial_hidden_state, taps=[-1]) for layer in self.layers + self.articulation_model.layers if hasattr(layer, 'initial_hidden_state')])
 
-		self.generate_internal  = theano.function([piece], (results[0], results[1]), updates=gen_updates, allow_input_downcast=True, on_unused_input='ignore')
+			self.generate_internal  = theano.function([piece, gen_articulation], (results[0], results[1]), updates=gen_updates, allow_input_downcast=True, on_unused_input='ignore')
 
 
 	def steprec(self, concurrent_notes, prev_concurrent_notes, known_voices, prev_known_voices, current_beat, prev_note, prev_prev_note, prev_hiddens):
@@ -197,26 +227,31 @@ class MultiExpert:
 		if self.transparent: return new_states, final_product, probs
 		else: return new_states, final_product
 
-	def train(self, pieces, training_set, minibatch_size):
+	def train(self, pieces, training_set, articulation_training_set, minibatch_size):
 		minibatch = None
+		articulation_minibatch = None
 		prior_timesteps = None
 		timestep_info = None
 		for i in pieces:
-			start = np.random.randint(0, len(training_set[i][0])-(minibatch_size+1))
+			start = 0 if len(training_set[i][0]) == minibatch_size else np.random.randint(0, len(training_set[i][0])-(minibatch_size))
 			prior_timestep = training_set[i][None,:,None,start-1] if start > 0 else np.zeros_like(training_set[i][None,:,None,start])
 			if minibatch is None:
 				minibatch = training_set[i][None,:,start:start+minibatch_size]
+				articulation_minibatch = articulation_training_set[i][None,:,start:start+minibatch_size]
 				prior_timesteps = prior_timestep
 				timestep_info = int_vector_to_onehot_matrix(np.arange(start, start+minibatch_size) % self.rhythm_encoding_size, self.rhythm_encoding_size)[None,:]
 			else:
 				minibatch = np.append(minibatch, training_set[i][None,:,start:start+minibatch_size], axis=0)
+				articulation_minibatch = np.append(articulation_minibatch, articulation_training_set[i][None,:,start:start+minibatch_size], axis=0)
 				prior_timesteps = np.append(prior_timesteps, prior_timestep, axis=0)
 				timestep_info = np.append(timestep_info, int_vector_to_onehot_matrix(
 					np.arange(start, start+minibatch_size) % self.rhythm_encoding_size, self.rhythm_encoding_size)[None,:], axis=0)
-		return self.train_internal(minibatch, prior_timesteps, timestep_info)
+		training_mask = np.zeros_like(minibatch[:,self.voice_to_predict])
+		training_mask[articulation_minibatch[:,self.voice_to_predict,:,0] == 1] = 1
+		return self.train_internal(minibatch, prior_timesteps, timestep_info, training_mask)
 
 	# pieces is an array of ints corresponding to indicies of the pieces selected from training_set
-	def validate(self, pieces, validation_set, minibatch_size):
+	def validate(self, pieces, validation_set, articulation_validation_set, minibatch_size):
 		print("Validating...")
 		minibatch = None
 		prior_timesteps = None
@@ -226,17 +261,26 @@ class MultiExpert:
 			prior_timestep = validation_set[i][None,:,None,start-1] if start > 0 else np.zeros_like(validation_set[i][None,:,None,start])
 			if minibatch is None:
 				minibatch = validation_set[i][None,:,start:start+minibatch_size]
+				articulation_minibatch = articulation_validation_set[i][None,:,start:start+minibatch_size]
 				prior_timesteps = prior_timestep
 				timestep_info = int_vector_to_onehot_matrix(np.arange(start, start+minibatch_size) % self.rhythm_encoding_size, self.rhythm_encoding_size)[None,:]
 			else:
 				minibatch = np.append(minibatch, validation_set[i][None,:,start:start+minibatch_size], axis=0)
+				articulation_minibatch = np.append(articulation_minibatch, articulation_validation_set[i][None,:,start:start+minibatch_size], axis=0)
 				prior_timesteps = np.append(prior_timesteps, prior_timestep, axis=0)
 				timestep_info = np.append(timestep_info, int_vector_to_onehot_matrix(
 					np.arange(start, start+minibatch_size) % self.rhythm_encoding_size, self.rhythm_encoding_size)[None,:], axis=0)
-		if self.transparent: return self.validate_internal(minibatch, prior_timesteps, timestep_info), minibatch, prior_timesteps, timestep_info
-		else: return self.validate_internal(minibatch, prior_timesteps, timestep_info)
+
+		training_mask = np.zeros_like(minibatch[:,self.voice_to_predict])
+		training_mask[articulation_minibatch[:,self.voice_to_predict,:,0] == 1] = 1
+		if self.transparent: return self.validate_internal(minibatch, prior_timesteps, timestep_info, training_mask), minibatch, prior_timesteps, timestep_info
+		else: return self.validate_internal(minibatch, prior_timesteps, timestep_info, training_mask)
 
 
-	def generate(self, piece):
-		pitches, articulations = self.generate_internal(piece)
-		return pitches, articulations
+	def generate(self, piece, articulation):
+		if self.transparent:
+			outputs = self.generate_internal(piece, articulation)
+			return outputs[0], outputs[1], outputs[2:]
+		else:
+			pitches, articulations = self.generate_internal(piece, articulation)
+			return pitches, articulations

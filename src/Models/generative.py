@@ -179,7 +179,7 @@ class SimpleGenerative(GenerativeLSTM):
 		minibatch = None
 		prior_timesteps = None
 		for i in pieces:
-			start = np.random.randint(0, len(training_set[i][0])-(minibatch_size+1))
+			start =  0 if len(training_set[i][0]) == minibatch_size else np.random.randint(0, len(training_set[i][0])-(minibatch_size))
 			prior_timestep = training_set[i][None,:,None,start-1] if start > 0 else np.zeros_like(training_set[i][None,:,None,start])
 			if minibatch is None:
 				minibatch = training_set[i][None,:,start:start+minibatch_size]
