@@ -242,13 +242,16 @@ def train(model, model_name, dataset, articulation_data, min_num, max_num, times
 			sample_articulation = validation_set_articulation[n]
 			if visualize:
 				new_voice, new_articulation, probs = model.generate(sample_piece, sample_articulation)
+				i = 0
 				for expert_model,p in zip(model.expert_models, probs):
 					visualize_probs(p, title=expert_model.__class__.__name__ + 'GeneratedOutput' + str(minibatch_count), 
-						path=output_dir + expert_model.__class__.__name__ + 'GeneratedOutput' + str(minibatch_count))
+						path=output_dir + expert_model.__class__.__name__ + str(i)+ 'GeneratedOutput' + str(minibatch_count))
+					i+=1
 				visualize_probs(probs[-1], title= 'ArticulationModelGeneratedOutput' + str(minibatch_count), 
 						path=output_dir + 'ArticulationModelGeneratedOutput' + str(minibatch_count))
 				visualize_probs(probs[-2], title= 'FinalGeneratedOutput' + str(minibatch_count), 
 						path = output_dir + 'FinalGeneratedOutput' + str(minibatch_count))
+
 
 
 			else:
@@ -314,17 +317,16 @@ if __name__=='__main__':
 	rhythm_info = theano.map(lambda a, t: T.set_subtensor(T.zeros(t)[a % t], 1), sequences=T.arange(gen_length), non_sequences=rhythm_encoding_size)[0]
 
 	spacing_models = []
-	for i in range(3):
+	for i in range(4):
 		if i == VOICE_TO_PREDICT: continue
 		spacing_models.append(VoiceSpacingExpert(min_num,max_num, [100,200,100], i, VOICE_TO_PREDICT,pieces=pieces, piece=piece, rng=rng))
-	spacing_multiexpert = MultiExpert(spacing_models, 4, VOICE_TO_PREDICT, min_num, max_num, timestep_length, rhythm_encoding_size,
-		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=False)
+	spacing_multiexpert = MultiExpert(spacing_models, 4, VOICE_TO_PREDICT, min_num, max_num, timestep_length, rhythm_encoding_size)
 	contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], VOICE_TO_PREDICT,
 		voices=voices, gen_length=gen_length, first_note=first_note, rng=rng)
 	rhythm_expert = RhythmExpert(rhythm_encoding_size, max_num-min_num, [100,200,100], VOICE_TO_PREDICT, 
 		timestep_info=timestep_info, prior_timestep_pitch_info=prior_timesteps, pieces=pieces, rhythm_info=rhythm_info, rng=rng)
-	simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,VOICE_TO_PREDICT,
-		pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
-	model = MultiExpert([spacing_multiexpert, contour_expert, rhythm_expert, simple_generative], 4, VOICE_TO_PREDICT,  min_num, max_num, timestep_length, rhythm_encoding_size,
+	#simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,VOICE_TO_PREDICT,
+	#	pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
+	model = MultiExpert(spacing_models + [contour_expert, rhythm_expert], 4, VOICE_TO_PREDICT,  min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
-	train(model, 'longer_minibatches', dataset, articulation_data, min_num, max_num, timestep_length, visualize=True)
+	train(model, 'no_spacing_multiexpert', dataset, articulation_data, min_num, max_num, timestep_length, visualize=True)
