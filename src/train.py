@@ -247,9 +247,9 @@ def train(model, model_name, dataset, articulation_data, min_num, max_num, times
 					visualize_probs(p, title=expert_model.__class__.__name__ + 'GeneratedOutput' + str(minibatch_count), 
 						path=output_dir + expert_model.__class__.__name__ + str(i)+ 'GeneratedOutput' + str(minibatch_count))
 					i+=1
-				visualize_probs(probs[-1], title= 'ArticulationModelGeneratedOutput' + str(minibatch_count), 
+				visualize_probs(probs[-2], title= 'ArticulationModelGeneratedOutput' + str(minibatch_count), 
 						path=output_dir + 'ArticulationModelGeneratedOutput' + str(minibatch_count))
-				visualize_probs(probs[-2], title= 'FinalGeneratedOutput' + str(minibatch_count), 
+				visualize_probs(probs[-1], title= 'FinalGeneratedOutput' + str(minibatch_count), 
 						path = output_dir + 'FinalGeneratedOutput' + str(minibatch_count))
 
 

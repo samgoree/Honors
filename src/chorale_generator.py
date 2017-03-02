@@ -427,9 +427,9 @@ def generate_melody(dataset, articulation_data, min_num, max_num, timestep_lengt
 				visualize_probs(p, title=expert_model.__class__.__name__ + 'GeneratedOutput' + str(n), 
 					path=output_dir + expert_model.__class__.__name__ + str(i)+ 'GeneratedOutput' + str(n))
 				i+=1
-			visualize_probs(probs[-1], title= 'ArticulationModelGeneratedOutput' + str(n), 
+			visualize_probs(probs[-2], title= 'ArticulationModelGeneratedOutput' + str(n), 
 					path=output_dir + 'ArticulationModelGeneratedOutput' + str(n))
-			visualize_probs(probs[-2], title= 'FinalGeneratedOutput' + str(n), 
+			visualize_probs(probs[-1], title= 'FinalGeneratedOutput' + str(n), 
 					path = output_dir + 'FinalGeneratedOutput' + str(n))
 		else:
 			generated_melody, generated_articulation = model.generate(sample_piece, sample_articulation)
