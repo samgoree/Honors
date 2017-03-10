@@ -183,7 +183,6 @@ def generate_voice_by_voice(dataset, articulation_data, min_num, max_num, timest
 			v = int(np.floor(rng.uniform(0,4,1))[0])
 
 			generated_piece[v], generated_articulation[v] = models[v].generate(generated_piece, generated_articulation)
-
 		output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(generated_piece, generated_articulation)], path=output_dir + 'output' + str(n) + '.mid')
 
 
