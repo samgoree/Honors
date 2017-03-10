@@ -130,6 +130,27 @@ def instantiate_and_train_tenor_model(dataset, articulation_data, min_num, max_n
 	train(tenor_model, 'Tenor_model', dataset, articulation_data, min_num, max_num, timestep_length, output_dir=output_dir, visualize=visualize)
 	return tenor_model
 
+# builds a multiexpert of one simple generative model for comparison
+def instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, voice_to_predict, rhythm_encoding_size, output_dir=None, visualize=False):
+
+	timestep_info = T.itensor3()
+	prior_timesteps=T.itensor4()
+	pieces=T.itensor4()
+	piece=T.itensor3()
+	rng = theano.tensor.shared_randomstreams.RandomStreams()
+	# do some symbolic variable manipulation so that we can compile a function with updates for all the models
+	voices = pieces[:,voice_to_predict]
+	gen_length = piece.shape[1]
+	first_note = T.argmax(piece[voice_to_predict,0])
+	rhythm_info = theano.map(lambda a, t: T.set_subtensor(T.zeros(t)[a % t], 1), sequences=T.arange(gen_length), non_sequences=rhythm_encoding_size)[0]
+
+	simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,voice_to_predict,
+		pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
+	model = MultiExpert([simple_generative], 4, voice_to_predict,  min_num, max_num, timestep_length, rhythm_encoding_size,
+		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=visualize)
+	train(model, 'Just_simple_generative', dataset, articulation_data, min_num, max_num, timestep_length, output_dir=output_dir, visualize=visualize)
+	return model
+
 # empty_voice should be a zero-initialized array for a voice of the correct length and correct note encoding
 # rng is a random number generator
 # generated voice will have a gaussian distribution with standard deviation 1/4 of the note encoding from the middle note of the encoding
@@ -147,7 +168,7 @@ def generate_random_voice(empty_voice, rng):
 # num_to_generate is the number of pieces to output (from different first notes)
 # soprano,alto,tenor,bass weights are string filepaths of pickled model files. If they are left as None, new models will be trained from the dataset
 # if visualize is true, the training process will be visualized at every validation step
-def generate_voice_by_voice(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
+def generate_voice_by_voice(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, simple=False, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
 	rng = np.random.RandomState()
 	# make output directory
 	output_dir = '../Data/Output/generate_voice_by_voice/' + strftime("%a,%d,%H:%M", localtime())+ '/'
@@ -159,14 +180,27 @@ def generate_voice_by_voice(dataset, articulation_data, min_num, max_num, timest
 	os.mkdir(output_dir + 'bass/')
 	# train models
 	models = []
-	models.append(instantiate_and_train_bass_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'bass/', 
-		visualize=visualize)if bass_weights is None else load_weights(bass_weights))
-	models.append(instantiate_and_train_tenor_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
-		visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
-	models.append(instantiate_and_train_alto_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
-		visualize=visualize)if alto_weights is None else load_weights(alto_weights))
-	models.append(instantiate_and_train_soprano_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'soprano/', 
-		visualize=visualize) if soprano_weights is None else load_weights(soprano_weights))
+	if simple:
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 0, rhythm_encoding_size, output_dir=output_dir + 'soprano/', 
+			visualize=visualize) if soprano_weights is None else load_weights(soprano_weights))
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 1, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
+			visualize=visualize) if alto_weights is None else load_weights(alto_weights))
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 2, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
+			visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 3, rhythm_encoding_size, output_dir=output_dir + 'bass/', 
+			visualize=visualize)if bass_weights is None else load_weights(bass_weights))
+
+		
+	else:
+		models.append(instantiate_and_train_soprano_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'soprano/', 
+			visualize=visualize) if soprano_weights is None else load_weights(soprano_weights))
+		models.append(instantiate_and_train_alto_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
+			visualize=visualize)if alto_weights is None else load_weights(alto_weights))
+		models.append(instantiate_and_train_tenor_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
+			visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
+		models.append(instantiate_and_train_bass_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'bass/', 
+			visualize=visualize)if bass_weights is None else load_weights(bass_weights))
+
 
 	for n in range(num_to_generate):
 		# choose a random bach piece to steal the length of
@@ -186,7 +220,7 @@ def generate_voice_by_voice(dataset, articulation_data, min_num, max_num, timest
 		output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(generated_piece, generated_articulation)], path=output_dir + 'output' + str(n) + '.mid')
 
 
-def harmonize_melody(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
+def harmonize_melody(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, simple=False, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
 	rng = np.random.RandomState()
 	# make output directory
 	output_dir = '../Data/Output/harmonize_melody/' + strftime("%a,%d,%H:%M", localtime())+ '/'
@@ -197,14 +231,22 @@ def harmonize_melody(dataset, articulation_data, min_num, max_num, timestep_leng
 	os.mkdir(output_dir + 'bass/')
 	# train models
 	models = []
-	models.append(instantiate_and_train_bass_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'bass/', 
-		visualize=visualize)if bass_weights is None else load_weights(bass_weights))
-	models.append(instantiate_and_train_tenor_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
-		visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
-	models.append(instantiate_and_train_alto_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
-		visualize=visualize)if alto_weights is None else load_weights(alto_weights))
-
-
+	if simple:
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 1, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
+			visualize=visualize) if alto_weights is None else load_weights(alto_weights))
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 2, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
+			visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 3, rhythm_encoding_size, output_dir=output_dir + 'bass/', 
+			visualize=visualize)if bass_weights is None else load_weights(bass_weights))
+		
+	else:
+		models.append(instantiate_and_train_alto_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
+			visualize=visualize)if alto_weights is None else load_weights(alto_weights))
+		models.append(instantiate_and_train_tenor_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
+			visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
+		models.append(instantiate_and_train_bass_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'bass/', 
+			visualize=visualize)if bass_weights is None else load_weights(bass_weights))
+		
 	for n in range(num_to_generate):
 		# choose a random bach piece to steal the length of
 
@@ -213,21 +255,23 @@ def harmonize_melody(dataset, articulation_data, min_num, max_num, timestep_leng
 		sample_articulation = articulation_data[sample_piece_number]
 		generated_piece = np.zeros_like(sample_piece)
 		generated_articulation = np.zeros_like(sample_articulation)
-		generated_piece[3] = sample_piece[3]
-		generated_articulation[3] = sample_articulation[3]
-		for i in range(3):
+		generated_piece[0] = sample_piece[0]
+		generated_articulation[0] = sample_articulation[0]
+		for i in range(1,4):
 			generate_random_voice(generated_piece[i], rng)
 			generate_random_voice(generated_articulation, rng) #this just works
 		for i in range(100): # arbitrary number of generation runs
-			v = int(np.floor(rng.uniform(0,3,1))[0])
+			v = int(np.floor(rng.uniform(1,4,1))[0])
 
-			generated_piece[v], generated_articulation[v] = models[v].generate(generated_piece, generated_articulation)
+			generated_piece[v], generated_articulation[v] = models[v-1].generate(generated_piece, generated_articulation)
 
 
 
 		output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(generated_piece, generated_articulation)], path=output_dir + 'output' + str(n) + '.mid')
+		output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(sample_piece, sample_articulation)], path=output_dir + 'sample_for_output' + str(n) + '.mid')
 
-def harmonize_bass(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
+"""def harmonize_bass(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, simple=False, 
+	soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
 	rng = np.random.RandomState()
 	# make output directory
 	output_dir = '../Data/Output/harmonize_bass/' + strftime("%a,%d,%H:%M", localtime())+ '/'
@@ -238,12 +282,20 @@ def harmonize_bass(dataset, articulation_data, min_num, max_num, timestep_length
 	os.mkdir(output_dir + 'tenor/')
 	# train models
 	models = []
-	models.append(instantiate_and_train_tenor_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
-		visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
-	models.append(instantiate_and_train_alto_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
-		visualize=visualize)if alto_weights is None else load_weights(alto_weights))
-	models.append(instantiate_and_train_soprano_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'soprano/', 
-		visualize=visualize) if soprano_weights is None else load_weights(soprano_weights))
+	if simple:
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 2, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
+			visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 1, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
+			visualize=visualize)if alto_weights is None else load_weights(alto_weights))
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 0, rhythm_encoding_size, output_dir=output_dir + 'soprano/', 
+			visualize=visualize) if soprano_weights is None else load_weights(soprano_weights))
+	else:
+		models.append(instantiate_and_train_tenor_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
+			visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
+		models.append(instantiate_and_train_alto_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
+			visualize=visualize)if alto_weights is None else load_weights(alto_weights))
+		models.append(instantiate_and_train_soprano_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'soprano/', 
+			visualize=visualize) if soprano_weights is None else load_weights(soprano_weights))
 
 
 	for n in range(num_to_generate):
@@ -265,8 +317,9 @@ def harmonize_bass(dataset, articulation_data, min_num, max_num, timestep_length
 			generated_piece[v+1], generated_articulation[v+1] = models[v].generate(generated_piece, generated_articulation)
 
 		output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(generated_piece, generated_articulation)], path=output_dir + 'output' + str(n) + '.mid')
+		output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(sample_piece, sample_articulation)], path=output_dir + 'sample_for_output' + str(n) + '.mid')
 
-def harmonize_melody_and_bass(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
+def harmonize_melody_and_bass(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, simple=False, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
 	rng = np.random.RandomState()
 	# make output directory
 	output_dir = '../Data/Output/harmonize_melody_and_bass/' + strftime("%a,%d,%H:%M", localtime())+ '/'
@@ -276,10 +329,16 @@ def harmonize_melody_and_bass(dataset, articulation_data, min_num, max_num, time
 	os.mkdir(output_dir + 'tenor/')
 	# train models
 	models = []
-	models.append(instantiate_and_train_tenor_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
-		visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
-	models.append(instantiate_and_train_alto_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
-		visualize=visualize)if alto_weights is None else load_weights(alto_weights))
+	if simple:
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 2, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
+			visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
+		models.append(instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 1, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
+			visualize=visualize)if alto_weights is None else load_weights(alto_weights))
+	else:
+		models.append(instantiate_and_train_tenor_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'tenor/', 
+			visualize=visualize)if tenor_weights is None else load_weights(tenor_weights))
+		models.append(instantiate_and_train_alto_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'alto/', 
+			visualize=visualize)if alto_weights is None else load_weights(alto_weights))
 
 	for n in range(num_to_generate):
 		# choose a random bach piece to steal the length of
@@ -296,18 +355,19 @@ def harmonize_melody_and_bass(dataset, articulation_data, min_num, max_num, time
 		for i in range(1,3):
 			generate_random_voice(generated_piece[i], rng)
 			generate_random_voice(generated_articulation, rng) #this just works
-		for i in range(100): # arbitrary number of generation runs
+		for i in range(10): # arbitrary number of generation runs
 			v = int(np.floor(rng.uniform(0,2,1))[0])
 
 			generated_piece[v+1], generated_articulation[v+1] = models[v].generate(generated_piece, generated_articulation)
 
-		output_midi([timesteps_to_notes(generated_piece[0], generated_articulation[0], min_num, timestep_length * PPQ), timesteps_to_notes(generated_piece[3], generated_articulation[3], min_num, timestep_length * PPQ)], path=output_dir + 'sample_for_output' + str(n) + '.mid')
-		output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(generated_piece, generated_articulation)], path=output_dir + 'output' + str(n) + '.mid')
+			output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(generated_piece, generated_articulation)], path=output_dir + 'output' + str(n) + 'pass ' + str(i) + '.mid')
+		output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(sample_piece, sample_articulation)], path=output_dir + 'sample_for_output' + str(n) + '.mid')
 
 # an experiment for my own sanity
 # generates a piece feeding in the actual other voices to each model, but assembling the final piece out of just the outputs
 # TODO: update with articulation
-def generate_informed(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
+def generate_informed(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, 
+	soprano_weights=None, alto_weights=None, tenor_weights=None, bass_weights=None, visualize=False):
 	rng = np.random.RandomState()
 	# make output directory
 	output_dir = '../Data/Output/generate_informed/' + strftime("%a,%d,%H:%M", localtime())+ '/'
@@ -341,16 +401,52 @@ def generate_informed(dataset, articulation_data, min_num, max_num, timestep_len
 
 		output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(generated_piece, generated_articulation)], path=output_dir + 'output' + str(n) + '.mid')
 		output_midi([timesteps_to_notes(voice, artic, min_num, timestep_length * PPQ) for voice,artic in zip(sample_piece, sample_articulation)], path=output_dir + 'sample_for_output' + str(n) + '.mid')
+"""
+def generate_melody(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, num_to_generate, simple=False, 
+	soprano_weights=None, visualize=False):
+	rng = np.random.RandomState()
+	# make output directory
+	output_dir = '../Data/Output/generate_melody/' + strftime("%a,%d,%H:%M", localtime())+ '/'
+	if not os.path.exists('../Data/Output/generate_melody'): os.mkdir('../Data/Output/generate_melody')
+	os.mkdir(output_dir)
+	os.mkdir(output_dir + 'soprano/')
+
+	if simple: model =instantiate_and_train_simple_model(dataset, articulation_data, min_num, max_num, timestep_length, 0, rhythm_encoding_size, output_dir=output_dir + 'soprano/', 
+			visualize=visualize) if soprano_weights is None else load_weights(soprano_weights)
+	else: model = instantiate_and_train_soprano_model(dataset, articulation_data, min_num, max_num, timestep_length, rhythm_encoding_size, output_dir=output_dir + 'soprano/', 
+			visualize=visualize) if soprano_weights is None else load_weights(soprano_weights)
+	for n in range(num_to_generate):
+		sample_piece_number = np.random.randint(len(dataset))
+		sample_piece = dataset[sample_piece_number]
+		sample_articulation = articulation_data[sample_piece_number]
+		if visualize:
+			generated_melody, generated_articulation, probs = model.generate(sample_piece, sample_articulation)
+			i = 0
+			for expert_model,p in zip(model.expert_models, probs):
+				visualize_probs(p, title=expert_model.__class__.__name__ + 'GeneratedOutput' + str(n), 
+					path=output_dir + expert_model.__class__.__name__ + str(i)+ 'GeneratedOutput' + str(n))
+				i+=1
+			visualize_probs(probs[-2], title= 'ArticulationModelGeneratedOutput' + str(n), 
+					path=output_dir + 'ArticulationModelGeneratedOutput' + str(n))
+			visualize_probs(probs[-1], title= 'FinalGeneratedOutput' + str(n), 
+					path = output_dir + 'FinalGeneratedOutput' + str(n))
+		else:
+			generated_melody, generated_articulation = model.generate(sample_piece, sample_articulation)
+		output_midi([timesteps_to_notes(generated_melody, generated_articulation, min_num, timestep_length * PPQ)], path=output_dir + 'output' + str(n) + '.mid')
 
 # load dataset
 if __name__ == '__main__':
 	dataset, articulation, min_num, max_num, timestep_length = pickle.load(open('../Data/music21_articulation_dataset.p', 'rb'))
 	rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
-	generate_voice_by_voice(dataset, articulation, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=False)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
+	#generate_voice_by_voice(dataset, articulation, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=False)#, soprano_weights='../Data/Output/Soprano_model/Tue,17,09:18/320.p', alto_weights='../Data/Output/Alto_model/Tue,17,09:23/240.p',
 	#																			#tenor_weights='../Data/Output/Tenor_model/Tue,17,09:30/280.p', bass_weights='../Data/Output/Bass_Model/Tue,17,09:37/60.p')
 	#
 	#generate_informed(dataset, articulation, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=False)
-	harmonize_melody_and_bass(dataset, articulation, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=False)
+	#harmonize_melody_and_bass(dataset, articulation, min_num,  max_num, timestep_length, rhythm_encoding_size, 1, visualize=False)
+	output_dir = '../Data/Output/simple_generative/' + strftime("%a,%d,%H:%M", localtime())+ '/'
+	if not os.path.exists('../Data/Output/simple_generative'): os.mkdir('../Data/Output/simple_generative')
+	os.mkdir(output_dir)
+	model = instantiate_and_train_simple_model(dataset, articulation, min_num, max_num, timestep_length, 0, rhythm_encoding_size, output_dir=output_dir, visualize=True)
 
 	#harmonize_melody(dataset, articulation, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=False)
 	#harmonize_bass(dataset, articulation, min_num,  max_num, timestep_length, rhythm_encoding_size, 10, visualize=False)

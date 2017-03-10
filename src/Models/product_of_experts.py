@@ -138,11 +138,13 @@ class MultiExpert:
 		# if we're being transparent (slightly slower setup), we make some more functions
 		if transparent:
 			self.internal_probs = []
+			i=0
 			for model, probs in zip(sub_experts, expert_probs):
 				if type(model) is MultiExpert: # if the model is a multi-expert, for now we just have the final probs from it TODO: make it transparent recursively
 					self.internal_probs.append(("MultiExpert", theano.function([pieces, prior_timesteps, timestep_info], probs, allow_input_downcast=True, on_unused_input='ignore')))
 				else:
-					self.internal_probs.append((str(type(model)).split("'")[1], theano.function([pieces,prior_timesteps, timestep_info], probs, allow_input_downcast=True, on_unused_input='ignore')))
+					self.internal_probs.append((str(type(model)).split("'")[1]+ str(i), theano.function([pieces,prior_timesteps, timestep_info], probs, allow_input_downcast=True, on_unused_input='ignore')))
+				i+=1
 			self.internal_final_prob = theano.function([pieces, prior_timesteps, timestep_info], self.generated_probs, allow_input_downcast=True, on_unused_input='ignore')
 
 		# generation is hard
@@ -195,7 +197,7 @@ class MultiExpert:
 										dict(initial=T.zeros([3], dtype='int64'), taps=[-1])] + 
 										[None] * (len(sub_experts) + 2) + 
 										[dict(initial=layer.initial_hidden_state, taps=[-1]) for layer in self.layers + self.articulation_model.layers if hasattr(layer, 'initial_hidden_state')])
-			self.generate_internal = theano.function([piece, gen_articulation], results[0:3+len(sub_experts)], updates=gen_updates, allow_input_downcast=True, on_unused_input='ignore')
+			self.generate_internal = theano.function([piece, gen_articulation], results[0:4+len(sub_experts)], updates=gen_updates, allow_input_downcast=True, on_unused_input='ignore')
 		else: 
 			results, gen_updates = theano.scan(step, n_steps=all_but_one_voice.shape[0], sequences = [
 										dict(input=T.concatenate([T.zeros([1,all_but_one_voice.shape[1]]),all_but_one_voice], axis=0), taps=[0,-1]), 

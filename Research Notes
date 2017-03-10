@@ -486,3 +486,48 @@ Second, I'm experimenting with lower sustain dropout in the articulation model. 
 no softmax does not work, weighted product does not work with zero or negative numbers. I would need to have another neural network layer combine them, and I'm not sure how to do that.
 
 increasing minibatch size also doesn't seem to work because there is one piece in the training set that is too short, so I removed that peice
+
+Tuesday 2/14/17
+
+Valentines day! I'm looking at the output and I'm at the point at which each voice seems pretty great. I have no idea how to extend that to the multi-voice generation output, though. One thought I've had is that the simple and rhythm experts are affecting the output too much, so it's choosing notes based on range and tonal consistency with themselves, not with the other voices, which is what the spacing models are supposed to do. I'm going to try just taking the product of all the experts, without the nested spacing multiexpert, and see what that does.
+
+Wednesday 2/15/17
+
+The lack of a spacing multiexpert didn't seem to help or hurt too much, it places much more emphasis on the generative model. Even when I take the generative model out, the spacing models just get deemphasized by the product.
+
+Wednesday 2/22/17
+
+Lots of work and not lots of notes! I wrote a draft introduction to my thesis which is probably way too long. I feel like Mozart, spending way too much time on my exposition I won't have the minutes to devote to my development that I'd like. Wow that sounds pretentious...eh
+
+I've also got the survey I wrote approved by the IRB, so I'm going to talk to Adam about setting up the qualtrics stuff and administering it, possibly starting tomorrow!
+
+Thursday 2/23/17
+
+I decided to choose samples from the output at random -- I'm going to choose three samples from each of eight categories - bach melody, bach harmony, simple melody, simple harmonization, simple harmony, multi melody, multi harmonization, multi harmony
+
+The numbers I randomly got are as follows:
+
+array([[6, 3, 9],
+       [4, 9, 6],
+       [0, 7, 2],
+       [8, 4, 0],
+       [7, 1, 9],
+       [1, 2, 3],
+       [5, 9, 1],
+       [7, 6, 8]])
+
+stuff's running on sinclair.oberlin.edu since it really doesn't like to do things via ssh for some reason
+
+Saturday 2/25/17
+
+Uploading things to soundcloud
+
+samples
+1,2,3 		- simple melody
+4,5,6 		- multi melody
+7,8,9 		- bach melody
+10,11,12	- simple harmonization
+13,14,15 	- multi harmonization
+16,17,18	- bach full
+19,20,20 	- simple full
+21,22,23	- multi full
