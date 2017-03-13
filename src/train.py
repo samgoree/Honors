@@ -320,13 +320,34 @@ if __name__=='__main__':
 	for i in range(4):
 		if i == VOICE_TO_PREDICT: continue
 		spacing_models.append(VoiceSpacingExpert(min_num,max_num, [100,200,100], i, VOICE_TO_PREDICT,pieces=pieces, piece=piece, rng=rng))
-	spacing_multiexpert = MultiExpert(spacing_models, 4, VOICE_TO_PREDICT, min_num, max_num, timestep_length, rhythm_encoding_size)
+	spacing_multiexpert = MultiExpert(spacing_models, 4, VOICE_TO_PREDICT, min_num, max_num, timestep_length, rhythm_encoding_size,
+		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=False)
 	contour_expert = VoiceContourExpert(min_num, max_num, [100,200,100], VOICE_TO_PREDICT,
 		voices=voices, gen_length=gen_length, first_note=first_note, rng=rng)
 	rhythm_expert = RhythmExpert(rhythm_encoding_size, max_num-min_num, [100,200,100], VOICE_TO_PREDICT, 
 		timestep_info=timestep_info, prior_timestep_pitch_info=prior_timesteps, pieces=pieces, rhythm_info=rhythm_info, rng=rng)
 	#simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,VOICE_TO_PREDICT,
 	#	pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
-	model = MultiExpert(spacing_models + [contour_expert, rhythm_expert], 4, VOICE_TO_PREDICT,  min_num, max_num, timestep_length, rhythm_encoding_size,
+	model = MultiExpert([spacing_multiexpert, contour_expert, rhythm_expert], 4, VOICE_TO_PREDICT,  min_num, max_num, timestep_length, rhythm_encoding_size,
 		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
 	train(model, 'no_spacing_multiexpert', dataset, articulation_data, min_num, max_num, timestep_length, visualize=True)
+
+	dataset, articulation_data, min_num, max_num, timestep_length = pickle.load(open('../Data/music21_articulation_dataset.p', 'rb'))
+
+	rhythm_encoding_size = int(4//timestep_length) # modified for music21: units are no longer midi timesteps (240 to a quarter note) but quarterLengths (1 to a quarter note)
+	timestep_info = T.itensor3()
+	prior_timesteps=T.itensor4()
+	pieces=T.itensor4()
+	piece=T.itensor3()
+	rng = theano.tensor.shared_randomstreams.RandomStreams()
+	# do some symbolic variable manipulation so that we can compile a function with updates for all the models
+	voices = pieces[:,VOICE_TO_PREDICT]
+	gen_length = piece.shape[1]
+	first_note = T.argmax(piece[0,VOICE_TO_PREDICT])
+	rhythm_info = theano.map(lambda a, t: T.set_subtensor(T.zeros(t)[a % t], 1), sequences=T.arange(gen_length), non_sequences=rhythm_encoding_size)[0]
+
+	simple_generative = SimpleGenerative(max_num-min_num, [100,200,100], 4,VOICE_TO_PREDICT,
+		pieces=pieces, prior_timesteps=prior_timesteps, piece=piece, rng=rng)
+	model2 = MultiExpert([simple_generative], 4, VOICE_TO_PREDICT, min_num, max_num, timestep_length, rhythm_encoding_size,
+		pieces=pieces, prior_timesteps=prior_timesteps, timestep_info=timestep_info, piece=piece, rng=rng, transparent=True)
+	train(model2, 'simple_generative', dataset, articulation_data, min_num, max_num, timestep_length, visualize=True)

@@ -531,3 +531,49 @@ samples
 16,17,18	- bach full
 19,20,20 	- simple full
 21,22,23	- multi full
+
+Thursday 3/2/17
+
+Survey is going well so far, I'm going to leave it up until Monday, I've already exceeded my goals for sample size though. I also gave samples to Leydon to analyze, the email I sent her is as follows:
+
+"Hi Dr. Leydon,
+
+Thank you again for agreeing to help with this part of my project! Attached are four short compositions. Recordings (synthesized from midi files) are at the links provided below.
+
+I'd like you to answer the following questions in a sentence or two for each sample, treating them as though they were the product of a novice (human) composer, explaining your answers with examples when possible:
+
+1. To what extent does this piece demonstrate domain competence? (i.e. is it recognizably a chorale, does it follow the conventions of chorale composition, etc.)
+
+2. To what extent does this piece demonstrate the intentionality, investment or emotional expression of the composer?
+
+3. To what extent does this piece demonstrate original thinking or come across new relationships between existing concepts?
+
+4. To what extent is this piece valuable as a piece of music or work of art?
+
+I am interested more in the "why" than the evaluation (don't worry about my personal feelings or the feelings of the composer). I know how these pieces sound and I want your honest opinions.
+
+If you can do this in the next week or so, that would be amazing. If not, I do need it before the start of spring break (or, if necessary, in the first day or two of spring break). My paper is due at the end of break, and I'm depending on your input to make conclusions.
+
+Thank you so much! Let me know if there are any issues.
+
+Sam"
+
+
+While I'm at it, I'll include the message that was sent out to various mailing lists accompaning the survey:
+
+"Hi, I am currently conducting a survey as part of my honors research in computer science. If you choose to participate, you'll be asked to listen to some music samples and give your opinions on them, it's completely anonymous and will take about 8-10 minutes. Thank you for your help!"
+
+I also posted the survey on Facebook with this text:
+
+"I did research making computers compose music! You should take my survey, listen to music samples and guess if those samples were composed by a human! If lots of people do, I might have a stastically significant sample size...
+
+If you choose to participate, you'll be asked to listen to some music samples and give your opinions on them, it's completely anonymous and will take about 8-10 minutes. The survey is open until next Monday.
+Thank you for your help!"
+
+While I'm not sure who exactly has taken the survey, it was shared by some Oberlin alums and some of my family members, so while it has a broader sample than just Oberlin students, it is very much constrained to people two or three degrees of separation from me. Further, the people who felt inclined to take the survey were mostly musicians
+
+3/12/17
+
+Not a lot of notes recently! I did the survey, it finished, I'll analyze the results at some point. Stats is hard, graphs are easy.
+
+My probability output for the multiexpert was misnumbered, so the "multi-expert output" was actually the beat expert output, hopefully that's fixed now and the output I'm getting to show graphs of training rates for the two models will serve that purpose in my paper.
