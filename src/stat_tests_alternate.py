@@ -78,33 +78,32 @@ for i,val in enumerate(better_lines):
 
 # make bar graphs for:
 	# bach vs. computer for each of 8 categories split by education level
-N = 1 # 8 categories to compare in three things
+N = 8 # 8 categories to compare in three things
 ind = np.arange(N)
-width = 0.1
+width = 0.25
 fig, ax = plt.subplots()
-for i in range(8):
-	rects1a = ax.bar(ind + width * i, np.sum(bach_vs_computer_values[i,:,0])/np.sum(bach_vs_computer_values[i]), width)
-	#yerr=bach_vs_computer_confidence_interval[i,:], error_kw=dict(ecolor='black'))
+rects1a = ax.bar(ind, bach_vs_computer_values[:,0,0]/np.sum(bach_vs_computer_values[:,0], axis=1), width, color = 'purple', label='Musician, knows Bach',
+	yerr=bach_vs_computer_confidence_interval[:,0], error_kw=dict(ecolor='black'))
 #rects1b = ax.bar(ind, bach_vs_computer[:,0,1]/np.sum(bach_vs_computer[:,0], axis=1), width, 
 #	bottom=bach_vs_computer[:,0,0]/np.sum(bach_vs_computer[:,0], axis=1), color='b')
 
-#rects2a = ax.bar(ind + width, bach_vs_computer_values[:,1,0]/np.sum(bach_vs_computer_values[:,1], axis=1), width,
-#	yerr=bach_vs_computer_confidence_interval[:,1], error_kw=dict(ecolor='black'))
+rects2a = ax.bar(ind + width, bach_vs_computer_values[:,1,0]/np.sum(bach_vs_computer_values[:,1], axis=1), width,color='blue', label='Musician, doesn\'t know Bach',
+	yerr=bach_vs_computer_confidence_interval[:,1], error_kw=dict(ecolor='black'))
 #rects2b = ax.bar(ind + width, bach_vs_computer[:,1,1]/np.sum(bach_vs_computer[:,1], axis=1), width, 
 #	bottom=bach_vs_computer[:,1,0]/np.sum(bach_vs_computer[:,1], axis=1), color='b')
 
-#rects3a = ax.bar(ind + 2 * width, bach_vs_computer_values[:,2,0]/np.sum(bach_vs_computer_values[:,2], axis=1), width,
-#	yerr=bach_vs_computer_confidence_interval[:,2], error_kw=dict(ecolor='black'))
+rects3a = ax.bar(ind + 2 * width, bach_vs_computer_values[:,2,0]/np.sum(bach_vs_computer_values[:,2], axis=1), width,color='cyan', label='Non-musician',
+	yerr=bach_vs_computer_confidence_interval[:,2], error_kw=dict(ecolor='black'))
 #rects3b = ax.bar(ind + 2 * width, bach_vs_computer[:,2,1]/np.sum(bach_vs_computer[:,2], axis=1), width, 
 #	bottom=bach_vs_computer[:,2,0]/np.sum(bach_vs_computer[:,2], axis=1), color='b')
 
 ax.set_ylim([0,1])
 ax.set_ylabel('Percent')
 ax.set_title('Survey Responses: Bach or Computer?')
-xticks = np.arange(8) * width + width/2
-#xticks = np.append(np.append(xticks, xticks + 1), xticks + 2)
-ax.set_xticks(xticks)
+ax.set_xticks(ind + width * 3 / 2)
 ax.set_xticklabels(('Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8'))
+
+ax.legend(loc=2)
 
 plt.show()
 
@@ -116,11 +115,11 @@ N = 8 # 8 categories to compare in three things
 ind = np.arange(N)
 width = 0.25
 fig, ax = plt.subplots()
-rects1a = ax.bar(ind, likeability[:,0], width, yerr=likeability_confidence_interval[:,0], error_kw=dict(ecolor='black'), color='purple')
+rects1a = ax.bar(ind, likeability[:,0], width, yerr=likeability_confidence_interval[:,0], error_kw=dict(ecolor='black'), color='purple', label='Musician, knows Bach')
 
-rects2a = ax.bar(ind + width, likeability[:,1], width, yerr=likeability_confidence_interval[:,1], error_kw=dict(ecolor='black'), color='blue')
+rects2a = ax.bar(ind + width, likeability[:,1], width, yerr=likeability_confidence_interval[:,1], error_kw=dict(ecolor='black'), color='blue', label='Musician, doesn\'t know Bach')
 
-rects3a = ax.bar(ind + 2 * width, likeability[:,2], width, yerr=likeability_confidence_interval[:,2], error_kw=dict(ecolor='black'), color='cyan')
+rects3a = ax.bar(ind + 2 * width, likeability[:,2], width, yerr=likeability_confidence_interval[:,2], error_kw=dict(ecolor='black'), color='cyan', label='Non-musician')
 
 ax.set_ylabel('Average Response')
 ax.set_title('Survey Responses: Likeability')
@@ -129,6 +128,6 @@ ax.set_xticklabels(('Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8'))
 ax.set_yticks(np.arange(1,6))
 ax.set_yticklabels(('Dislike a Lot', 'Dislike', 'Neutral', 'Like', 'Like a Lot'))
 
-
+ax.legend(loc=2)
 
 plt.show()
